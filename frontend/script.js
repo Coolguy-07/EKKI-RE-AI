@@ -6,6 +6,7 @@
 // Configuration Options
 const CONFIG = {
     API_URL: 'http://127.0.0.1:8000/chat',
+    STREAM_API_URL: 'http://127.0.0.1:8000/chat/stream',
     STATUS: {
         READY: 'Ready',
         THINKING: 'Thinking...',
@@ -61,17 +62,15 @@ function scrollToBottom() {
 }
 
 /**
- * Creates and appends a chat message element to the DOM safely.
+ * Creates and appends a message container placeholder to the DOM.
  * @param {string} sender - Identifier for sender ('User' or 'Assistant')
- * @param {string} content - Message text content
  * @param {boolean} isUser - True if sender is user, false if assistant
+ * @returns {HTMLElement} The message content DOM element for appending text
  */
-function appendMessage(sender, content, isUser = false) {
-    // Parent Message Container
+function appendMessagePlaceholder(sender, isUser = false) {
     const messageElement = document.createElement('div');
     messageElement.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
 
-    // Header Area (Sender Name & Timestamp)
     const headerElement = document.createElement('div');
     headerElement.className = 'message-header';
 
@@ -86,31 +85,36 @@ function appendMessage(sender, content, isUser = false) {
     headerElement.appendChild(senderSpan);
     headerElement.appendChild(timeSpan);
 
-    // Body Area (Text Content)
     const contentElement = document.createElement('div');
     contentElement.className = 'message-content';
-    
-    // Security: Safely render text to prevent XSS attacks
-    contentElement.textContent = content;
 
-    // Assemble components
     messageElement.appendChild(headerElement);
     messageElement.appendChild(contentElement);
 
-    // Append to conversation list
     messagesList.appendChild(messageElement);
-
-    // Auto scroll to latest entry
     scrollToBottom();
+
+    return contentElement;
 }
 
 /**
- * Sends prompt text to backend FastAPI endpoint.
- * @param {string} userMessage - Text prompt submitted by user
- * @returns {Promise<string>} Response text from the model
+ * Creates and appends a static chat message element to the DOM safely.
+ * @param {string} sender - Identifier for sender ('User' or 'Assistant')
+ * @param {string} content - Message text content
+ * @param {boolean} isUser - True if sender is user, false if assistant
  */
-async function fetchAiResponse(userMessage) {
-    const response = await fetch(CONFIG.API_URL, {
+function appendMessage(sender, content, isUser = false) {
+    const contentElement = appendMessagePlaceholder(sender, isUser);
+    contentElement.textContent = content;
+}
+
+/**
+ * Sends prompt text to backend streaming endpoint and yields tokens in real time via SSE.
+ * @param {string} userMessage - Text prompt submitted by user
+ * @param {function(string): void} onChunkCallback - Called on each received token chunk
+ */
+async function fetchAiResponseStream(userMessage, onChunkCallback) {
+    const response = await fetch(CONFIG.STREAM_API_URL, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -122,12 +126,50 @@ async function fetchAiResponse(userMessage) {
         throw new Error(`Server returned error status: ${response.status}`);
     }
 
-    const data = await response.json();
-    return data.response;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine.startsWith('data:')) continue;
+
+            const jsonStr = trimmedLine.slice(5).trim();
+            if (!jsonStr) continue;
+
+            try {
+                const parsed = JSON.parse(jsonStr);
+
+                if (parsed.error) {
+                    throw new Error(parsed.error);
+                }
+
+                if (parsed.content) {
+                    onChunkCallback(parsed.content);
+                }
+
+                if (parsed.done) {
+                    return;
+                }
+            } catch (err) {
+                if (err.message && !err.message.includes('Unexpected token')) {
+                    throw err;
+                }
+            }
+        }
+    }
 }
 
 /**
- * Handles message submission lifecycle.
+ * Handles message submission lifecycle with real-time SSE streaming.
  * @param {string} messageText - Input text from user
  */
 async function handleUserSubmit(messageText) {
@@ -142,28 +184,33 @@ async function handleUserSubmit(messageText) {
     setFormDisabledState(true);
     updateStatus(CONFIG.STATUS.THINKING);
 
+    // Create Assistant Message Placeholder element for streaming
+    const assistantContentEl = appendMessagePlaceholder('EKKI-RE-AI', false);
+
     try {
-        // Request response from backend
-        const aiResponse = await fetchAiResponse(messageText);
-        
-        // Render AI Message
-        appendMessage('EKKI-RE-AI', aiResponse, false);
+        await fetchAiResponseStream(messageText, (chunk) => {
+            assistantContentEl.textContent += chunk;
+            scrollToBottom();
+        });
+
         updateStatus(CONFIG.STATUS.READY);
     } catch (error) {
         console.error('API Interaction Error:', error);
-        
-        // Display friendly error message in conversation
+
+        // Remove empty placeholder if nothing was streamed yet
+        if (!assistantContentEl.textContent && assistantContentEl.parentElement) {
+            assistantContentEl.parentElement.remove();
+        }
+
         appendMessage(
-            'System Error', 
-            'Unable to connect to local AI service. Ensure FastAPI & Ollama server are running.', 
+            'System Error',
+            'Unable to connect to local AI service. Ensure FastAPI & Ollama server are running.',
             false
         );
         updateStatus(CONFIG.STATUS.ERROR);
-        
-        // Reset status to ready after delay on error
+
         setTimeout(() => updateStatus(CONFIG.STATUS.READY), 4000);
     } finally {
-        // Re-enable form controls
         setFormDisabledState(false);
         promptInput.focus();
     }

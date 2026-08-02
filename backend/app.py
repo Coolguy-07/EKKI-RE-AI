@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, StringConstraints
 
 from .ai import AIClientError, ai_client
@@ -18,7 +19,7 @@ app = FastAPI(
     debug=settings.DEBUG,
 )
 
-# CORS Middleware Configuration for Frontend Development
+# CORS Configuration
 origins = [
     "http://127.0.0.1:5500",
     "http://localhost:5500",
@@ -110,4 +111,49 @@ def chat(request: ChatRequest) -> ChatResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while processing your request.",
+        ) from err
+
+
+@app.post(
+    "/chat/stream",
+    status_code=status.HTTP_200_OK,
+    summary="Send a message to the AI assistant with real-time streaming",
+    description="Streams text generation tokens real-time using Server-Sent Events (SSE).",
+)
+def chat_stream(request: ChatRequest) -> StreamingResponse:
+    """Handles streaming chat generation requests using SSE.
+
+    Invokes ai_client.generate_stream() and streams chunk frames using StreamingResponse.
+    """
+    try:
+        generator = ai_client.generate_stream(prompt=request.message)
+        return StreamingResponse(
+            content=generator,
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    except ValueError as err:
+        logger.warning("Validation failure on chat stream request: %s", err)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(err),
+        ) from err
+
+    except AIClientError as err:
+        logger.error("AI service error during streaming request: %s", err)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(err),
+        ) from err
+
+    except Exception as err:
+        logger.exception("Unexpected error encountered during /chat/stream request.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while initializing response stream.",
         ) from err

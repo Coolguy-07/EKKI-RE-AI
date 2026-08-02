@@ -34,10 +34,16 @@ class Settings(BaseSettings):
         description="Default LLM model identifier used for local generation.",
     )
 
+    # --- Memory Limits ---
+    MAX_MEMORY_MESSAGES: int = Field(
+        default=20,
+        description="Maximum number of historical messages retained in memory.",
+    )
+
     # --- Database Settings ---
     DATABASE_URL: str = Field(
         default="sqlite:///./ekki_re_ai.db",
-        description="SQLAlchemy database connection string.",
+        description="SQLAlchemy connection URI for persistent storage.",
     )
 
     # Pydantic Settings Configuration
@@ -51,13 +57,9 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """Creates and caches the application settings instance.
-
-    Using `@lru_cache` ensures environment variables and configuration files
-    are parsed only once during application startup.
-    """
+    """Creates and caches the application settings instance."""
     return Settings()
 
 
-# Default instance for convenient import across the backend
+# Default global settings instance
 settings = get_settings()
