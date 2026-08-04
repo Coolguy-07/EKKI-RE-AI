@@ -8,7 +8,7 @@ Released:
 Added:
 - FastAPI backend
 - Ollama integration
-- Qwen3:8B integration
+- Mannix-RE:latest integration
 - REST API
 - Swagger documentation
 - Configuration system

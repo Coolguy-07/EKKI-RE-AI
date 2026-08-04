@@ -6,7 +6,7 @@ Completed:
 - Created Python virtual environment
 - Installed dependencies
 - Integrated Ollama
-- Integrated Qwen3:8B
+- Integrated Mannix-RE:latest
 - Built FastAPI backend
 - Created /chat endpoint
 - Verified API using Swagger

@@ -4,54 +4,672 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EKKI-RE-AI</title>
+    
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- CSS Stylesheets -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     <link rel="stylesheet" href="style.css">
+
+    <!-- External Libraries for Markdown Rendering, Sanitization & Code Highlighting -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+    <!-- Application Script -->
     <script src="script.js" defer></script>
 </head>
 <body>
 
-    <!-- Application Header -->
+    <!-- Minimal Header (ChatGPT Desktop Style) -->
     <header class="app-header">
         <div class="header-container">
-            <h1 class="app-title">EKKI-RE-AI</h1>
-            <span class="status-badge" id="status-badge" aria-live="polite">Ready</span>
+            <div class="header-left">
+                <button id="sidebar-toggle-btn" class="icon-btn sidebar-toggle-btn" aria-label="Toggle sidebar" title="Toggle Sidebar">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="9" y1="3" x2="9" y2="21"></line>
+                    </svg>
+                </button>
+                
+                <div class="brand-wrapper">
+                    <svg class="brand-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
+                    <span class="app-title">EKKI-RE-AI</span>
+                </div>
+
+                <div class="header-project-badge" id="header-project-badge" title="Active Project Workspace">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <span id="header-project-name">No Active Project</span>
+                </div>
+            </div>
+
+            <div class="header-right">
+                <div class="model-badge" id="header-model-badge" title="Active Model">
+                    <span class="model-badge-dot"></span>
+                    <span id="header-model-name">mannix-re:latest</span>
+                </div>
+
+                <button id="monitor-toggle-btn" class="header-btn monitor-toggle-btn" title="System Monitor (Ctrl+K)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                        <line x1="8" y1="21" x2="16" y2="21"></line>
+                        <line x1="12" y1="17" x2="12" y2="21"></line>
+                    </svg>
+                    <span>System Monitor</span>
+                </button>
+
+                <span class="status-badge" id="status-badge" aria-live="polite">Ready</span>
+            </div>
         </div>
     </header>
 
-    <!-- Main Content Area -->
-    <main class="app-main">
-        <!-- Chat History Container -->
-        <section class="chat-container" id="chat-container" aria-label="Chat Messages History">
-            <div class="messages-list" id="messages-list" role="log" aria-live="polite" aria-relevant="additions">
-                <!-- Chat messages will be dynamically injected here via JavaScript -->
+    <!-- Main Wrapper -->
+    <div class="app-wrapper">
+        
+        <!-- Compact Sidebar (~250px) -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <button id="new-chat-btn" class="new-chat-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    <span>New Chat</span>
+                </button>
             </div>
-        </section>
 
-        <!-- Prompt Input Form -->
-        <section class="input-section" aria-label="Prompt Input Section">
-            <form id="chat-form" class="chat-form">
-                <div class="input-wrapper">
-                    <label for="prompt-input" class="visually-hidden">Enter your prompt</label>
-                    <textarea 
-                        id="prompt-input" 
-                        name="prompt" 
-                        class="prompt-input" 
-                        placeholder="Type your message here..." 
-                        rows="1" 
-                        required 
-                        aria-required="true"
-                    ></textarea>
-                    <button type="submit" id="send-button" class="send-button" aria-label="Send prompt">
-                        <span class="button-text">Send</span>
+            <!-- Project Workspaces Section -->
+            <div class="sidebar-section projects-section">
+                <div class="sidebar-section-header">
+                    <div class="section-title">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <span>Project Workspaces</span>
+                    </div>
+                    <button id="new-project-btn" class="icon-btn-sm" title="Create New Project">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
                     </button>
                 </div>
-            </form>
-        </section>
-    </main>
 
-    <!-- Application Footer -->
-    <footer class="app-footer">
-        <p class="footer-info">Local AI • Ollama • Qwen3</p>
-    </footer>
+                <div id="projects-tree-container" class="projects-tree-container">
+                    <!-- Dynamic project explorer items -->
+                </div>
+            </div>
+
+            <!-- Conversation History Section -->
+            <div class="sidebar-section conversations-section">
+                <div class="sidebar-search">
+                    <div class="search-input-wrapper">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input type="text" id="history-search-input" placeholder="Search chats..." autocomplete="off">
+                    </div>
+                </div>
+
+                <div class="sidebar-history-container">
+                    <ul id="conversation-list" class="conversation-list">
+                        <!-- Dynamic conversation items -->
+                    </ul>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Sidebar Overlay for Mobile -->
+        <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+        <!-- Chat-First Main Stage -->
+        <main class="app-main">
+
+            <!-- Chat Area -->
+            <section class="chat-container" id="chat-container" aria-label="Chat Area">
+
+                <!-- Simple Clean Empty Chat Screen (ChatGPT style) -->
+                <div class="empty-chat-screen" id="empty-chat-screen">
+                    <div class="empty-chat-logo">
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="1.8">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                        </svg>
+                    </div>
+                    <h2 class="empty-chat-title">What can I help you analyze today?</h2>
+                    <p class="empty-chat-sub" id="empty-chat-sub">Select or create a Project Workspace in the sidebar to organize your analysis files.</p>
+                </div>
+
+                <div class="messages-list" id="messages-list" role="log" aria-live="polite">
+                    <!-- Dynamic chat message cards -->
+                </div>
+            </section>
+
+            <!-- Floating Prompt Box Area (ChatGPT Desktop Style) -->
+            <section class="input-section" aria-label="Prompt Input">
+                
+                <div class="dropzone-overlay" id="dropzone-overlay">
+                    <div class="dropzone-box">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <span>Drop File to Upload to Active Project</span>
+                    </div>
+                </div>
+
+                <form id="chat-form" class="chat-form">
+                    <div class="attachment-chips-container" id="attachment-chips"></div>
+
+                    <div class="input-wrapper">
+                        <button type="button" id="file-upload-btn" class="icon-btn file-upload-btn" title="Upload file to Project Workspace">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                            </svg>
+                        </button>
+                        <input type="file" id="file-input" hidden accept="*/*">
+                        <input type="file" id="project-file-input" hidden accept="*/*">
+
+                        <textarea 
+                            id="prompt-input" 
+                            name="prompt" 
+                            class="prompt-input" 
+                            placeholder="Ask EKKI-RE-AI or paste assembly, pseudocode, or hex..." 
+                            rows="1" 
+                            required 
+                            aria-required="true"
+                        ></textarea>
+
+                        <button type="submit" id="send-button" class="send-button" aria-label="Send message">
+                            <svg class="send-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="input-footer-hint">
+                        <span>Local Ollama LLM • Reverse Engineering Specialized</span>
+                    </div>
+                </form>
+            </section>
+        </main>
+
+        <!-- Hidden System Monitor Drawer (Opens on Ctrl+K or button click) -->
+        <aside id="status-dashboard" class="status-dashboard">
+            <div class="dashboard-header">
+                <div class="dashboard-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                        <line x1="8" y1="21" x2="16" y2="21"></line>
+                        <line x1="12" y1="17" x2="12" y2="21"></line>
+                    </svg>
+                    <span>System Monitor</span>
+                </div>
+                <button id="close-monitor-btn" class="icon-btn close-monitor-btn" aria-label="Close monitor">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="dashboard-content">
+                <div class="telemetry-card">
+                    <div class="card-header-sm">
+                        <span class="card-label">Backend Connection</span>
+                        <span class="telemetry-status-dot connected" id="telemetry-conn-dot"></span>
+                    </div>
+                    <div class="telemetry-value" id="telemetry-conn-val">127.0.0.1:8000 (Healthy)</div>
+                </div>
+
+                <div class="telemetry-card">
+                    <div class="card-header-sm">
+                        <span class="card-label">Configured LLM Model</span>
+                    </div>
+                    <div class="telemetry-value cyan-text" id="telemetry-model-val">mannix-re:latest</div>
+                </div>
+
+                <div class="telemetry-card">
+                    <div class="card-header-sm">
+                        <span class="card-label">VRAM Evacuation Protocol</span>
+                        <span class="badge-tag green" id="vram-status-tag">0MB (Evacuated)</span>
+                    </div>
+                    <div class="telemetry-progress-wrapper">
+                        <div class="telemetry-progress-fill" id="vram-progress-fill" style="width: 0%;"></div>
+                    </div>
+                    <div class="telemetry-sub">keep_alive: 0 VRAM eviction active</div>
+                </div>
+
+                <div class="telemetry-card">
+                    <div class="card-header-sm">
+                        <span class="card-label">Context Window</span>
+                        <span class="telemetry-sub-val" id="context-val">4096 / 8192</span>
+                    </div>
+                    <div class="telemetry-progress-wrapper">
+                        <div class="telemetry-progress-fill purple" id="context-progress-fill" style="width: 50%;"></div>
+                    </div>
+                </div>
+
+                <div class="telemetry-card">
+                    <div class="card-header-sm">
+                        <span class="card-label">Active Agent</span>
+                    </div>
+                    <div class="telemetry-value purple-text" id="telemetry-agent-val">Lead Synthesizer</div>
+                </div>
+
+                <div class="telemetry-card">
+                    <div class="card-header-sm">
+                        <span class="card-label">Session Memory Isolation</span>
+                    </div>
+                    <div class="telemetry-value" id="telemetry-session-val">conv-default</div>
+                </div>
+            </div>
+        </aside>
+
+    </div>
+
+    <!-- Create Project Modal -->
+    <div id="create-project-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <span>Create Project Workspace</span>
+                </div>
+                <button type="button" class="icon-btn close-modal-btn" id="close-create-project-modal">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <form id="create-project-form" class="modal-form">
+                <div class="form-group">
+                    <label for="project-name-input">Project Name <span class="required">*</span></label>
+                    <input type="text" id="project-name-input" placeholder="e.g. Malware Analysis Alpha" required maxlength="100">
+                </div>
+                <div class="form-group">
+                    <label for="project-desc-input">Description / Analyst Notes</label>
+                    <textarea id="project-desc-input" placeholder="Describe the goal or target sample..." rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="project-tags-input">Tags (comma-separated)</label>
+                    <input type="text" id="project-tags-input" placeholder="e.g. pe32, malware, x86">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancel-create-project">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="submit-create-project">Create Workspace</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- File Metadata & Preview Modal -->
+    <div id="file-details-modal" class="modal-overlay hidden">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2">
+                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                        <polyline points="13 2 13 9 20 9"></polyline>
+                    </svg>
+                    <span id="modal-file-display-name">File Details</span>
+                </div>
+                <button type="button" class="icon-btn close-modal-btn" id="close-file-modal">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Modal Navigation Tabs -->
+                <div class="modal-tabs">
+                    <button type="button" class="modal-tab-btn active" data-tab="tab-general">General Metadata</button>
+                    <button type="button" class="modal-tab-btn hidden" id="tab-btn-pe" data-tab="tab-pe">PE Information</button>
+                    <button type="button" class="modal-tab-btn hidden" id="tab-btn-elf" data-tab="tab-elf">ELF Information</button>
+                    <button type="button" class="modal-tab-btn hidden" id="tab-btn-macho" data-tab="tab-macho">Mach-O Information</button>
+                </div>
+
+                <!-- Tab 1: General Metadata -->
+                <div class="modal-tab-pane active" id="tab-general">
+                    <div class="meta-grid">
+                        <div class="meta-item">
+                            <span class="meta-label">File ID (Immutable):</span>
+                            <span class="meta-value font-mono cyan-text" id="modal-file-id">file-xxxxxxxx</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">File Size:</span>
+                            <span class="meta-value" id="modal-file-size">0 KB</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Detected Type:</span>
+                            <span class="badge-tag purple" id="modal-detected-type">Detecting...</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Architecture:</span>
+                            <span class="badge-tag cyan" id="modal-detected-arch">N/A</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">MIME Type:</span>
+                            <span class="meta-value" id="modal-file-mime">application/octet-stream</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Analysis Status:</span>
+                            <span class="badge-tag green" id="modal-analysis-status">Analyzed</span>
+                        </div>
+
+                        <!-- Entropy Bar Section -->
+                        <div class="meta-item full-width">
+                            <div class="entropy-header">
+                                <span class="meta-label">Shannon Entropy:</span>
+                                <span class="entropy-value font-mono" id="modal-file-entropy">0.0000 / 8.0000</span>
+                            </div>
+                            <div class="entropy-bar-track">
+                                <div class="entropy-bar-fill" id="modal-entropy-fill" style="width: 0%;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Hashes Section -->
+                        <div class="meta-item full-width">
+                            <span class="meta-label">MD5:</span>
+                            <div class="hash-wrapper">
+                                <span class="meta-value font-mono hash-val" id="modal-file-md5">---</span>
+                                <button type="button" class="icon-btn-sm copy-hash-btn" data-hash-target="modal-file-md5" title="Copy MD5">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="meta-item full-width">
+                            <span class="meta-label">SHA-1:</span>
+                            <div class="hash-wrapper">
+                                <span class="meta-value font-mono hash-val" id="modal-file-sha1">---</span>
+                                <button type="button" class="icon-btn-sm copy-hash-btn" data-hash-target="modal-file-sha1" title="Copy SHA-1">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="meta-item full-width">
+                            <span class="meta-label">SHA-256:</span>
+                            <div class="hash-wrapper">
+                                <span class="meta-value font-mono hash-val" id="modal-file-sha256">---</span>
+                                <button type="button" class="icon-btn-sm copy-hash-btn" data-hash-target="modal-file-sha256" title="Copy SHA-256">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="meta-item full-width">
+                            <span class="meta-label">SHA-512:</span>
+                            <div class="hash-wrapper">
+                                <span class="meta-value font-mono hash-val" id="modal-file-sha512">---</span>
+                                <button type="button" class="icon-btn-sm copy-hash-btn" data-hash-target="modal-file-sha512" title="Copy SHA-512">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: PE Information -->
+                <div class="modal-tab-pane hidden" id="tab-pe">
+                    <div class="meta-grid">
+                        <div class="meta-item">
+                            <span class="meta-label">Architecture:</span>
+                            <span class="badge-tag cyan" id="pe-val-arch">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Subsystem:</span>
+                            <span class="meta-value" id="pe-val-subsystem">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Entry Point (RVA):</span>
+                            <span class="meta-value font-mono cyan-text" id="pe-val-entrypoint">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Image Base:</span>
+                            <span class="meta-value font-mono" id="pe-val-imagebase">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Timestamp:</span>
+                            <span class="meta-value" id="pe-val-timestamp">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Sections Count:</span>
+                            <span class="meta-value" id="pe-val-sections-count">0</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Imported DLLs:</span>
+                            <span class="meta-value" id="pe-val-import-count">0 DLLs</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Export Count:</span>
+                            <span class="meta-value" id="pe-val-export-count">0</span>
+                        </div>
+                    </div>
+
+                    <!-- PE Sections Table -->
+                    <div class="pe-section-block">
+                        <h4 class="pe-block-title">Section Headers & Entropy</h4>
+                        <div class="pe-table-wrapper" id="pe-sections-wrapper">
+                            <table class="pe-data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Virt Size</th>
+                                        <th>Raw Size</th>
+                                        <th>Virtual Addr (RVA)</th>
+                                        <th>Entropy</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pe-sections-tbody">
+                                    <!-- Dynamic Section Rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- PE Imports List -->
+                    <div class="pe-section-block">
+                        <h4 class="pe-block-title">Imported DLLs & Functions</h4>
+                        <div class="pe-imports-list" id="pe-imports-list">
+                <!-- Tab 3: ELF Information -->
+                <div class="modal-tab-pane hidden" id="tab-elf">
+                    <div class="meta-grid">
+                        <div class="meta-item">
+                            <span class="meta-label">Architecture:</span>
+                            <span class="badge-tag cyan" id="elf-val-arch">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">ELF Type:</span>
+                            <span class="meta-value" id="elf-val-type">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Bitness & Endianness:</span>
+                            <span class="meta-value" id="elf-val-bitness">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">OS ABI:</span>
+                            <span class="meta-value" id="elf-val-osabi">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Entry Point:</span>
+                            <span class="meta-value font-mono cyan-text" id="elf-val-entrypoint">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Interpreter (PT_INTERP):</span>
+                            <span class="meta-value font-mono" id="elf-val-interp">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Sections Count:</span>
+                            <span class="meta-value" id="elf-val-sections-count">0</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Needed Libraries:</span>
+                            <span class="meta-value" id="elf-val-needed-count">0</span>
+                        </div>
+                    </div>
+
+                    <!-- ELF Sections Table -->
+                    <div class="pe-section-block">
+                        <h4 class="pe-block-title">Section Headers & Entropy</h4>
+                        <div class="pe-table-wrapper">
+                            <table class="pe-data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Type</th>
+                                        <th>Address</th>
+                                        <th>Size</th>
+                                        <th>Entropy</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="elf-sections-tbody">
+                                    <!-- Dynamic ELF Section Rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- ELF Dynamic Libraries -->
+                    <div class="pe-section-block">
+                        <h4 class="pe-block-title">Dynamic Needed Libraries (DT_NEEDED)</h4>
+                        <div class="pe-imports-list" id="elf-libraries-list">
+                            <!-- Dynamic Libraries List -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 4: Mach-O Information -->
+                <div class="modal-tab-pane hidden" id="tab-macho">
+                    <div class="meta-grid">
+                        <div class="meta-item">
+                            <span class="meta-label">CPU Architecture:</span>
+                            <span class="badge-tag cyan" id="macho-val-arch">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">File Type:</span>
+                            <span class="meta-value" id="macho-val-filetype">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Entry Point (LC_MAIN):</span>
+                            <span class="meta-value font-mono cyan-text" id="macho-val-entrypoint">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">UUID:</span>
+                            <span class="meta-value font-mono" id="macho-val-uuid">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Segments Count:</span>
+                            <span class="meta-value" id="macho-val-segment-count">0</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Sections Count:</span>
+                            <span class="meta-value" id="macho-val-section-count">0</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Dynamic Libraries:</span>
+                            <span class="meta-value" id="macho-val-dylib-count">0</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Symbols Count:</span>
+                            <span class="meta-value" id="macho-val-symbol-count">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Mach-O Sections Table -->
+                    <div class="pe-section-block">
+                        <h4 class="pe-block-title">Segments & Sections</h4>
+                        <div class="pe-table-wrapper">
+                            <table class="pe-data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Section Name</th>
+                                        <th>Segment</th>
+                                        <th>Address</th>
+                                        <th>Size</th>
+                                        <th>Entropy</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="macho-sections-tbody">
+                                    <!-- Dynamic Mach-O Section Rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Mach-O Dynamic Libraries -->
+                    <div class="pe-section-block">
+                        <h4 class="pe-block-title">Loaded Dynamic Libraries (LC_LOAD_DYLIB)</h4>
+                        <div class="pe-imports-list" id="macho-libraries-list">
+                            <!-- Dynamic Libraries List -->
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="modal-actions border-top">
+                <button type="button" class="btn btn-secondary" id="btn-attach-to-chat" title="Reference in chat prompt">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                    </svg>
+                    <span>Attach Reference to Chat</span>
+                </button>
+                
+                <button type="button" class="btn btn-secondary" id="btn-download-file" title="Download raw binary">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span>Download</span>
+                </button>
+
+                <button type="button" class="btn btn-secondary" id="btn-rename-file" title="Rename display filename">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 20h9"></path>
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                    </svg>
+                    <span>Rename</span>
+                </button>
+
+                <button type="button" class="btn btn-danger" id="btn-delete-file" title="Delete file from workspace">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    <span>Delete</span>
+                </button>
+            </div>
+        </div>
+    </div>
 
 </body>
 </html>

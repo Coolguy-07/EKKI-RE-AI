@@ -52,7 +52,7 @@ Current implementation:
           Ollama Local Server
                   │
                   ▼
-             Qwen3:8B Model
+             Mannix-RE:latest Model
                   │
                   ▼
             Generated Response
@@ -161,7 +161,7 @@ Ollama
 
 ↓
 
-Qwen3
+Mannix-RE
 
 ↓
 
@@ -217,7 +217,7 @@ As the project grows additional modules will be introduced.
  Local AI Model (Ollama)
       │
       ▼
- Qwen / Future Models
+ Mannix-RE / Future Models
 ```
 
 ---
@@ -399,7 +399,7 @@ Backend
 AI
 
 - Ollama
-- Qwen3:8B
+- Mannix-RE:latest
 
 Development
 
@@ -495,4 +495,4 @@ Every new feature should fit into the existing architecture rather than introduc
 
 Version 0.1
 
-Initial architecture documenting the FastAPI backend, Ollama integration, Qwen3 model integration, and planned long-term system evolution.
+Initial architecture documenting the FastAPI backend, Ollama integration, Mannix-RE model integration, and planned long-term system evolution.

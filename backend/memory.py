@@ -94,7 +94,34 @@ class InMemoryMemoryStore(BaseMemoryStore):
             self._messages.clear()
 
 
-# Default singleton memory instance
-memory_store: BaseMemoryStore = InMemoryMemoryStore(
-    max_messages=settings.MAX_MEMORY_MESSAGES
+class SessionMemoryManager:
+    """Thread-safe manager maintaining isolated memory stores per session ID."""
+
+    def __init__(self, max_messages_per_session: int = 20) -> None:
+        self._max_messages: int = max_messages_per_session
+        self._stores: dict[str, BaseMemoryStore] = {}
+        self._lock: threading.RLock = threading.RLock()
+
+    def get_store(self, session_id: str) -> BaseMemoryStore:
+        """Retrieves or initializes an isolated memory store for session_id."""
+        with self._lock:
+            sid = session_id or "default"
+            if sid not in self._stores:
+                self._stores[sid] = InMemoryMemoryStore(max_messages=self._max_messages)
+            return self._stores[sid]
+
+    def clear_session(self, session_id: str) -> None:
+        """Clears memory for a specific session_id."""
+        with self._lock:
+            if session_id in self._stores:
+                self._stores[session_id].clear()
+                del self._stores[session_id]
+
+
+# Global session memory manager instance
+session_memory_manager = SessionMemoryManager(
+    max_messages_per_session=settings.MAX_MEMORY_MESSAGES
 )
+
+# Default global memory store instance for backwards compatibility
+memory_store: BaseMemoryStore = session_memory_manager.get_store("default")

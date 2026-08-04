@@ -1,18 +1,41 @@
 /**
  * EKKI-RE-AI Frontend Application Controller
- * Handles user interactions, API communication, and dynamic UI rendering.
+ * Production-Grade Stability Edition with Session Isolation, Streaming Abort Controllers,
+ * Project Workspace Explorer, Secure HTML Escaping, and Throttled Render Buffering.
  */
 
 // Configuration Options
 const CONFIG = {
     API_URL: 'http://127.0.0.1:8000/chat',
     STREAM_API_URL: 'http://127.0.0.1:8000/chat/stream',
+    ORCHESTRATE_API_URL: 'http://127.0.0.1:8000/chat/orchestrate',
+    PROJECTS_API_URL: 'http://127.0.0.1:8000/api/projects',
     STATUS: {
         READY: 'Ready',
         THINKING: 'Thinking...',
         ERROR: 'Error'
     }
 };
+
+// LocalStorage Keys
+const STORAGE_KEYS = {
+    CONVERSATIONS: 'ekki_conversations',
+    ACTIVE_ID: 'ekki_active_conversation_id'
+};
+
+// State Data
+let conversations = [];
+let activeConversationId = null;
+let activeStreamController = null;
+let activeRenderFrameId = null;
+
+// Project Workspace State
+let projectsList = [];
+let activeProjectId = null;
+let activeProjectMetadata = null;
+let expandedProjectIds = new Set();
+let selectedFileMeta = null;
+let selectedFileProjectId = null;
 
 // DOM Element References
 const chatForm = document.getElementById('chat-form');
@@ -22,6 +45,21 @@ const messagesList = document.getElementById('messages-list');
 const statusBadge = document.getElementById('status-badge');
 const chatContainer = document.getElementById('chat-container');
 
+// Sidebar DOM References
+const sidebar = document.getElementById('sidebar');
+const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+const sidebarOverlay = document.getElementById('sidebar-overlay');
+const newChatBtn = document.getElementById('new-chat-btn');
+const conversationList = document.getElementById('conversation-list');
+
+// Project Workspace DOM References
+const projectsTreeContainer = document.getElementById('projects-tree-container');
+const newProjectBtn = document.getElementById('new-project-btn');
+const headerProjectName = document.getElementById('header-project-name');
+const createProjectModal = document.getElementById('create-project-modal');
+const createProjectForm = document.getElementById('create-project-form');
+const fileDetailsModal = document.getElementById('file-details-modal');
+
 /**
  * Formats current time into a human-readable string.
  * @returns {string} Formatted timestamp (e.g., "10:42 AM")
@@ -29,6 +67,34 @@ const chatContainer = document.getElementById('chat-container');
 function getCurrentTimestamp() {
     const now = new Date();
     return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * Formats file size in bytes to human-readable string (KB, MB).
+ * @param {number} bytes 
+ * @returns {string} Formatted size
+ */
+function formatFileSize(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+/**
+ * Escapes HTML entity characters to prevent XSS vulnerabilities.
+ * @param {string} str - Raw input text
+ * @returns {string} HTML-escaped string
+ */
+function escapeHtml(str) {
+    if (!str) return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 /**
@@ -62,12 +128,1112 @@ function scrollToBottom() {
 }
 
 /**
- * Creates and appends a message container placeholder to the DOM.
- * @param {string} sender - Identifier for sender ('User' or 'Assistant')
- * @param {boolean} isUser - True if sender is user, false if assistant
- * @returns {HTMLElement} The message content DOM element for appending text
+ * Aborts any currently active streaming HTTP request cleanly.
  */
-function appendMessagePlaceholder(sender, isUser = false) {
+function abortActiveStream() {
+    if (activeRenderFrameId) {
+        cancelAnimationFrame(activeRenderFrameId);
+        activeRenderFrameId = null;
+    }
+    if (activeStreamController) {
+        activeStreamController.abort();
+        activeStreamController = null;
+    }
+    setFormDisabledState(false);
+    updateStatus(CONFIG.STATUS.READY);
+}
+
+/**
+ * Loads conversation state from localStorage.
+ */
+function loadStateFromStorage() {
+    try {
+        const storedConv = localStorage.getItem(STORAGE_KEYS.CONVERSATIONS);
+        conversations = storedConv ? JSON.parse(storedConv) : [];
+        activeConversationId = localStorage.getItem(STORAGE_KEYS.ACTIVE_ID) || null;
+    } catch (e) {
+        console.error('Failed to load conversations from localStorage:', e);
+        conversations = [];
+        activeConversationId = null;
+    }
+}
+
+/**
+ * Persists conversations and active ID state into localStorage with quota overflow protection.
+ */
+function saveStateToStorage() {
+    try {
+        localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(conversations));
+        if (activeConversationId) {
+            localStorage.setItem(STORAGE_KEYS.ACTIVE_ID, activeConversationId);
+        } else {
+            localStorage.removeItem(STORAGE_KEYS.ACTIVE_ID);
+        }
+    } catch (e) {
+        if (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014) {
+            console.warn('localStorage quota exceeded. Auto-pruning oldest conversation history...');
+            if (conversations.length > 1) {
+                const activeConvIndex = conversations.findIndex(c => c.id === activeConversationId);
+                for (let i = conversations.length - 1; i >= 0; i--) {
+                    if (i !== activeConvIndex) {
+                        conversations.splice(i, 1);
+                        break;
+                    }
+                }
+                saveStateToStorage();
+            }
+        } else {
+            console.error('Failed to save state to localStorage:', e);
+        }
+    }
+}
+
+/**
+ * Generates a clean title string from user prompt text.
+ * @param {string} promptText 
+ * @returns {string} Truncated title string
+ */
+function generateTitleFromPrompt(promptText) {
+    if (!promptText) return 'New Conversation';
+    const cleaned = promptText.trim().replace(/\s+/g, ' ');
+    return cleaned.length > 28 ? `${cleaned.slice(0, 28)}...` : cleaned;
+}
+
+/**
+ * Renders the list of conversations inside the left sidebar.
+ */
+function renderSidebarList() {
+    if (!conversationList) return;
+    conversationList.innerHTML = '';
+
+    if (conversations.length === 0) {
+        const emptyItem = document.createElement('li');
+        emptyItem.className = 'conversation-item';
+        emptyItem.style.color = 'var(--text-muted)';
+        emptyItem.style.cursor = 'default';
+        emptyItem.textContent = 'No previous chats';
+        conversationList.appendChild(emptyItem);
+        return;
+    }
+
+    conversations.forEach((conv) => {
+        const item = document.createElement('li');
+        item.className = `conversation-item ${conv.id === activeConversationId ? 'active' : ''}`;
+        item.dataset.id = conv.id;
+
+        const titleWrapper = document.createElement('div');
+        titleWrapper.className = 'conv-title-wrapper';
+
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'conv-title';
+        titleSpan.textContent = conv.title || 'New Conversation';
+
+        titleWrapper.appendChild(titleSpan);
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'conv-actions';
+
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'conv-action-btn edit-btn';
+        editBtn.setAttribute('aria-label', 'Rename conversation');
+        editBtn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+            </svg>
+        `;
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'conv-action-btn delete-btn';
+        deleteBtn.setAttribute('aria-label', 'Delete conversation');
+        deleteBtn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+        `;
+
+        actionsDiv.appendChild(editBtn);
+        actionsDiv.appendChild(deleteBtn);
+
+        item.appendChild(titleWrapper);
+        item.appendChild(actionsDiv);
+
+        conversationList.appendChild(item);
+    });
+}
+
+/**
+ * Switches active chat session to specified conversation ID.
+ * @param {string} id - Conversation ID to display
+ */
+function loadConversation(id) {
+    abortActiveStream();
+
+    const targetConv = conversations.find(c => c.id === id);
+    if (!targetConv) return;
+
+    activeConversationId = id;
+    saveStateToStorage();
+    renderSidebarList();
+
+    messagesList.innerHTML = '';
+    targetConv.messages.forEach(msg => {
+        appendMessage(msg.sender, msg.content, msg.isUser, msg.timestamp);
+    });
+
+    updateWelcomeScreenState();
+    scrollToBottom();
+}
+
+/**
+ * Resets active conversation state to start a clean chat session.
+ */
+function startNewChat() {
+    abortActiveStream();
+
+    activeConversationId = null;
+    saveStateToStorage();
+    messagesList.innerHTML = '';
+    renderSidebarList();
+    updateWelcomeScreenState();
+
+    if (window.innerWidth <= 768) {
+        closeSidebar();
+    }
+    if (promptInput) promptInput.focus();
+}
+
+function renameConversation(id) {
+    const conv = conversations.find(c => c.id === id);
+    if (!conv) return;
+
+    const newTitle = prompt('Enter new conversation title:', conv.title);
+    if (newTitle !== null && newTitle.trim() !== '') {
+        conv.title = newTitle.trim();
+        saveStateToStorage();
+        renderSidebarList();
+    }
+}
+
+function deleteConversation(id) {
+    if (activeConversationId === id) {
+        abortActiveStream();
+    }
+
+    const confirmDelete = confirm('Are you sure you want to delete this conversation?');
+    if (!confirmDelete) return;
+
+    conversations = conversations.filter(c => c.id !== id);
+
+    if (activeConversationId === id) {
+        activeConversationId = conversations.length > 0 ? conversations[0].id : null;
+        messagesList.innerHTML = '';
+        if (activeConversationId) {
+            loadConversation(activeConversationId);
+        }
+    }
+
+    saveStateToStorage();
+    renderSidebarList();
+}
+
+function toggleSidebar() {
+    if (!sidebar) return;
+    if (window.innerWidth <= 768) {
+        sidebar.classList.toggle('open');
+        if (sidebarOverlay) sidebarOverlay.classList.toggle('open');
+    } else {
+        sidebar.classList.toggle('collapsed');
+    }
+}
+
+function closeSidebar() {
+    if (sidebar) sidebar.classList.remove('open');
+    if (sidebarOverlay) sidebarOverlay.classList.remove('open');
+}
+
+function setupSidebarListeners() {
+    if (sidebarToggleBtn) sidebarToggleBtn.addEventListener('click', toggleSidebar);
+    if (sidebarOverlay) sidebarOverlay.addEventListener('click', closeSidebar);
+    if (newChatBtn) newChatBtn.addEventListener('click', startNewChat);
+
+    if (conversationList) {
+        conversationList.addEventListener('click', (e) => {
+            const item = e.target.closest('.conversation-item');
+            if (!item || !item.dataset.id) return;
+            const id = item.dataset.id;
+
+            if (e.target.closest('.edit-btn')) {
+                e.stopPropagation();
+                renameConversation(id);
+                return;
+            }
+            if (e.target.closest('.delete-btn')) {
+                e.stopPropagation();
+                deleteConversation(id);
+                return;
+            }
+
+            loadConversation(id);
+            if (window.innerWidth <= 768) closeSidebar();
+        });
+    }
+}
+
+/* ==========================================================================
+   Project Workspace Frontend API & Tree Explorer
+   ========================================================================== */
+
+/**
+ * Fetches lightweight project summaries from backend REST API.
+ */
+async function fetchProjectsList() {
+    try {
+        const response = await fetch(CONFIG.PROJECTS_API_URL);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        projectsList = await response.json();
+        await fetchActiveProjectForSession();
+    } catch (err) {
+        console.warn('Workspace projects API unavailable:', err.message);
+        projectsList = [];
+        renderProjectsTree();
+    }
+}
+
+/**
+ * Fetches active project workspace metadata for default session.
+ */
+async function fetchActiveProjectForSession() {
+    try {
+        const sessionId = activeConversationId || 'default';
+        const response = await fetch(`${CONFIG.PROJECTS_API_URL}/active/${sessionId}`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data && data.project_id) {
+                activeProjectId = data.project_id;
+                activeProjectMetadata = data;
+                expandedProjectIds.add(data.project_id);
+            } else {
+                activeProjectId = null;
+                activeProjectMetadata = null;
+            }
+        }
+    } catch (err) {
+        console.warn('Could not fetch active project session:', err.message);
+    }
+    updateActiveProjectHeaderUI();
+    renderProjectsTree();
+}
+
+/**
+ * Updates header project badge indicator text and tooltip.
+ */
+function updateActiveProjectHeaderUI() {
+    if (headerProjectName) {
+        if (activeProjectMetadata) {
+            headerProjectName.textContent = activeProjectMetadata.name;
+            headerProjectName.parentElement.title = `Active Workspace: ${activeProjectMetadata.name} (${activeProjectMetadata.project_id})`;
+            headerProjectName.parentElement.classList.add('active');
+        } else {
+            headerProjectName.textContent = 'No Active Project';
+            headerProjectName.parentElement.title = 'No project currently active';
+            headerProjectName.parentElement.classList.remove('active');
+        }
+    }
+}
+
+/**
+ * Renders the sidebar tree view for Project Workspaces.
+ */
+async function renderProjectsTree() {
+    if (!projectsTreeContainer) return;
+    projectsTreeContainer.innerHTML = '';
+
+    if (projectsList.length === 0) {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.className = 'empty-files-tree';
+        emptyMsg.innerHTML = '<span>No projects yet. Click <strong>+</strong> to create one.</span>';
+        projectsTreeContainer.appendChild(emptyMsg);
+        return;
+    }
+
+    for (const proj of projectsList) {
+        const projItem = document.createElement('div');
+        const isActive = proj.project_id === activeProjectId;
+        const isExpanded = expandedProjectIds.has(proj.project_id);
+
+        projItem.className = `project-tree-item ${isActive ? 'active' : ''}`;
+
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'project-item-header';
+        headerDiv.dataset.id = proj.project_id;
+
+        headerDiv.innerHTML = `
+            <div class="project-item-left">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${isActive ? '#00f2fe' : 'currentColor'}" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span class="project-item-title">${escapeHtml(proj.name)}</span>
+            </div>
+            <div class="project-actions">
+                <button type="button" class="icon-btn-sm toggle-open-proj-btn" title="${isActive ? 'Close Project' : 'Open Project'}">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${isActive ? '#00f2fe' : 'currentColor'}" stroke-width="2">
+                        ${isActive ? '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>' : '<polygon points="5 3 19 12 5 21 5 3"/>'}
+                    </svg>
+                </button>
+                <button type="button" class="icon-btn-sm delete-proj-btn" title="Delete Project">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+                    </svg>
+                </button>
+            </div>
+        `;
+
+        headerDiv.addEventListener('click', (e) => {
+            if (e.target.closest('.toggle-open-proj-btn')) {
+                e.stopPropagation();
+                if (isActive) closeProjectSession(proj.project_id);
+                else openProjectSession(proj.project_id);
+                return;
+            }
+            if (e.target.closest('.delete-proj-btn')) {
+                e.stopPropagation();
+                deleteProjectWorkspace(proj.project_id);
+                return;
+            }
+
+            // Expand/collapse tree files
+            if (expandedProjectIds.has(proj.project_id)) {
+                expandedProjectIds.delete(proj.project_id);
+            } else {
+                expandedProjectIds.add(proj.project_id);
+            }
+            renderProjectsTree();
+        });
+
+        projItem.appendChild(headerDiv);
+
+        // Render Tree Sub-list if expanded or active
+        if (isExpanded || isActive) {
+            const filesUl = document.createElement('ul');
+            filesUl.className = 'project-files-tree';
+
+            try {
+                // Fetch full project metadata to list files
+                const projRes = await fetch(`${CONFIG.PROJECTS_API_URL}/${proj.project_id}`);
+                if (projRes.ok) {
+                    const projMeta = await projRes.json();
+                    const filesMap = projMeta.files || {};
+                    const filesList = Object.values(filesMap);
+
+                    if (filesList.length === 0) {
+                        const emptyFileLi = document.createElement('li');
+                        emptyFileLi.className = 'empty-files-tree';
+                        emptyFileLi.textContent = 'No files uploaded yet';
+                        filesUl.appendChild(emptyFileLi);
+                    } else {
+                        filesList.forEach((file) => {
+                            const fileLi = document.createElement('li');
+                            fileLi.className = 'file-tree-item';
+                            fileLi.innerHTML = `
+                                <div class="file-tree-left">
+                                    <span>📄</span>
+                                    <span class="file-name">${escapeHtml(file.filename)}</span>
+                                    <span class="file-id-tag">${escapeHtml(file.file_id)}</span>
+                                </div>
+                                <span class="file-size">${formatFileSize(file.size_bytes)}</span>
+                            `;
+
+                            fileLi.addEventListener('click', () => {
+                                openFileDetailsModal(proj.project_id, file);
+                            });
+
+                            filesUl.appendChild(fileLi);
+                        });
+                    }
+
+                    // Add "+ Upload File" button under active/expanded project
+                    const uploadBtnLi = document.createElement('li');
+                    const uploadBtn = document.createElement('button');
+                    uploadBtn.type = 'button';
+                    uploadBtn.className = 'upload-file-tree-btn';
+                    uploadBtn.innerHTML = `
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span>Upload File to Project</span>
+                    `;
+                    uploadBtn.addEventListener('click', () => {
+                        const projFileInput = document.getElementById('project-file-input');
+                        if (projFileInput) {
+                            projFileInput.dataset.targetProjectId = proj.project_id;
+                            projFileInput.click();
+                        }
+                    });
+
+                    uploadBtnLi.appendChild(uploadBtn);
+                    filesUl.appendChild(uploadBtnLi);
+                }
+            } catch (err) {
+                console.warn(`Could not load files for project ${proj.project_id}:`, err);
+            }
+
+            projItem.appendChild(filesUl);
+        }
+
+        projectsTreeContainer.appendChild(projItem);
+    }
+}
+
+/**
+ * Binds active project workspace for current session.
+ */
+async function openProjectSession(projectId) {
+    try {
+        const sessionId = activeConversationId || 'default';
+        const res = await fetch(`${CONFIG.PROJECTS_API_URL}/${projectId}/open`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            activeProjectId = projectId;
+            activeProjectMetadata = data.active_project;
+            expandedProjectIds.add(projectId);
+            updateActiveProjectHeaderUI();
+            await fetchProjectsList();
+        }
+    } catch (err) {
+        console.error('Failed to open project workspace session:', err);
+    }
+}
+
+/**
+ * Unbinds active project workspace for current session.
+ */
+async function closeProjectSession(projectId) {
+    try {
+        const sessionId = activeConversationId || 'default';
+        await fetch(`${CONFIG.PROJECTS_API_URL}/${projectId}/close`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId })
+        });
+        activeProjectId = null;
+        activeProjectMetadata = null;
+        updateActiveProjectHeaderUI();
+        await fetchProjectsList();
+    } catch (err) {
+        console.error('Failed to close project workspace session:', err);
+    }
+}
+
+/**
+ * Permanently deletes a project workspace.
+ */
+async function deleteProjectWorkspace(projectId) {
+    const confirmDel = confirm(`Are you sure you want to permanently delete project workspace '${projectId}'?`);
+    if (!confirmDel) return;
+
+    try {
+        const res = await fetch(`${CONFIG.PROJECTS_API_URL}/${projectId}`, { method: 'DELETE' });
+        if (res.ok) {
+            if (activeProjectId === projectId) {
+                activeProjectId = null;
+                activeProjectMetadata = null;
+                updateActiveProjectHeaderUI();
+            }
+            await fetchProjectsList();
+        }
+    } catch (err) {
+        console.error('Failed to delete project workspace:', err);
+    }
+}
+
+/**
+ * Uploads a file to a project workspace via REST API.
+ */
+async function uploadFileToWorkspace(file, targetProjectId = null) {
+    const projId = targetProjectId || activeProjectId;
+    if (!projId) {
+        alert('Please open or create a Project Workspace in the sidebar before uploading files.');
+        openCreateProjectModal();
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('tags', 'uploaded');
+
+    try {
+        updateStatus('Uploading file...');
+        const res = await fetch(`${CONFIG.PROJECTS_API_URL}/${projId}/files`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const fileMeta = await res.json();
+        updateStatus(CONFIG.STATUS.READY);
+
+        // Automatically append clean attachment reference to prompt textarea
+        attachFileReferenceToPrompt(fileMeta.filename, fileMeta.file_id);
+        await fetchProjectsList();
+    } catch (err) {
+        console.error('File upload failed:', err);
+        alert(`Failed to upload file: ${err.message}`);
+        updateStatus(CONFIG.STATUS.ERROR);
+    }
+}
+
+/**
+ * Inserts a clean reference token into prompt input text.
+ */
+function attachFileReferenceToPrompt(filename, fileId) {
+    if (!promptInput) return;
+    const refToken = `[Attached: ${filename} (id: ${fileId})]`;
+    if (!promptInput.value.includes(refToken)) {
+        promptInput.value = (promptInput.value ? promptInput.value + ' ' + refToken : refToken).trim();
+        autoResizeInput();
+        promptInput.focus();
+    }
+}
+
+/**
+ * Opens Create Project modal dialog.
+ */
+function openCreateProjectModal() {
+    if (createProjectModal) createProjectModal.classList.remove('hidden');
+}
+
+function closeCreateProjectModal() {
+    if (createProjectModal) createProjectModal.classList.add('hidden');
+}
+
+/**
+ * Handles Create Project Form Submission.
+ */
+async function handleCreateProjectSubmit(e) {
+    e.preventDefault();
+    const nameInput = document.getElementById('project-name-input');
+    const descInput = document.getElementById('project-desc-input');
+    const tagsInput = document.getElementById('project-tags-input');
+
+    if (!nameInput || !nameInput.value.trim()) return;
+
+    const tags = tagsInput && tagsInput.value.trim() ? tagsInput.value.split(',').map(t => t.trim()) : [];
+
+    try {
+        const res = await fetch(CONFIG.PROJECTS_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: nameInput.value.trim(),
+                description: descInput ? descInput.value.trim() : '',
+                tags: tags
+            })
+        });
+
+        if (res.ok) {
+            const newProj = await res.json();
+            closeCreateProjectModal();
+            nameInput.value = '';
+            if (descInput) descInput.value = '';
+            if (tagsInput) tagsInput.value = '';
+
+            await openProjectSession(newProj.project_id);
+        }
+    } catch (err) {
+        console.error('Failed to create project:', err);
+        alert('Could not create project workspace.');
+    }
+}
+
+/**
+ * Opens File Details Metadata Modal with Tab Support & PE Information Rendering.
+ */
+async function openFileDetailsModal(projectId, fileMeta) {
+    if (!fileDetailsModal) return;
+
+    selectedFileProjectId = projectId;
+    selectedFileMeta = fileMeta;
+
+    // Reset tab state to default "General Metadata"
+    switchFileModalTab('tab-general');
+
+    document.getElementById('modal-file-display-name').textContent = fileMeta.filename;
+    document.getElementById('modal-file-id').textContent = fileMeta.file_id;
+    document.getElementById('modal-file-size').textContent = formatFileSize(fileMeta.size_bytes);
+    document.getElementById('modal-file-mime').textContent = fileMeta.mime_type || 'application/octet-stream';
+    
+    // Set fallback initial UI values while fetching extended metadata
+    document.getElementById('modal-file-sha256').textContent = fileMeta.sha256;
+    document.getElementById('modal-detected-type').textContent = fileMeta.metadata && fileMeta.metadata.detected_type ? fileMeta.metadata.detected_type : 'Detecting...';
+    document.getElementById('modal-detected-arch').textContent = fileMeta.metadata && fileMeta.metadata.detected_architecture ? fileMeta.metadata.detected_architecture : 'N/A';
+    document.getElementById('modal-analysis-status').textContent = fileMeta.metadata && fileMeta.metadata.status ? fileMeta.metadata.status : 'analyzed';
+
+    fileDetailsModal.classList.remove('hidden');
+
+    // 1. Fetch full versioned metadata from REST API endpoint
+    try {
+        const res = await fetch(`${CONFIG.PROJECTS_API_URL}/${projectId}/files/${fileMeta.file_id}/metadata`);
+        if (res.ok) {
+            const meta = await res.json();
+            
+            document.getElementById('modal-detected-type').textContent = meta.detected_type || 'Unknown';
+            document.getElementById('modal-detected-arch').textContent = meta.detected_architecture || 'N/A';
+            
+            const statusBadge = document.getElementById('modal-analysis-status');
+            if (statusBadge) {
+                statusBadge.textContent = meta.status || 'analyzed';
+                statusBadge.className = meta.status === 'failed' ? 'badge-tag red' : 'badge-tag green';
+            }
+
+            // Hashes
+            if (document.getElementById('modal-file-md5')) document.getElementById('modal-file-md5').textContent = meta.md5 || '---';
+            if (document.getElementById('modal-file-sha1')) document.getElementById('modal-file-sha1').textContent = meta.sha1 || '---';
+            if (document.getElementById('modal-file-sha256')) document.getElementById('modal-file-sha256').textContent = meta.sha256 || '---';
+            if (document.getElementById('modal-file-sha512')) document.getElementById('modal-file-sha512').textContent = meta.sha512 || '---';
+
+            // Entropy Calculation & Progress Bar Rendering
+            const entropyVal = typeof meta.entropy === 'number' ? meta.entropy : 0;
+            const entropyText = document.getElementById('modal-file-entropy');
+            const entropyFill = document.getElementById('modal-entropy-fill');
+            
+            if (entropyText) entropyText.textContent = `${entropyVal.toFixed(4)} / 8.0000`;
+            if (entropyFill) {
+                const percentage = Math.min(100, Math.max(0, (entropyVal / 8.0) * 100));
+                entropyFill.style.width = `${percentage}%`;
+
+                if (entropyVal > 7.2) {
+                    entropyFill.style.background = 'linear-gradient(90deg, #ff0055, #ff5500)';
+                } else if (entropyVal > 6.0) {
+                    entropyFill.style.background = 'linear-gradient(90deg, #ffaa00, #ffff00)';
+                } else {
+                    entropyFill.style.background = 'linear-gradient(90deg, #00f2fe, #4facfe)';
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Failed to fetch file analysis metadata:', err);
+    }
+
+    // 2. Fetch PE, ELF, and Mach-O payload endpoints
+    const peTabBtn = document.getElementById('tab-btn-pe');
+    const elfTabBtn = document.getElementById('tab-btn-elf');
+    const machoTabBtn = document.getElementById('tab-btn-macho');
+
+    try {
+        const peRes = await fetch(`${CONFIG.PROJECTS_API_URL}/${projectId}/files/${fileMeta.file_id}/pe`);
+        if (peRes.ok) {
+            const pePayload = await peRes.json();
+            if (pePayload && pePayload.is_pe) {
+                if (peTabBtn) peTabBtn.classList.remove('hidden');
+                renderPeInformationUI(pePayload);
+            } else if (peTabBtn) {
+                peTabBtn.classList.add('hidden');
+            }
+        }
+    } catch (err) {
+        if (peTabBtn) peTabBtn.classList.add('hidden');
+    }
+
+    try {
+        const elfRes = await fetch(`${CONFIG.PROJECTS_API_URL}/${projectId}/files/${fileMeta.file_id}/elf`);
+        if (elfRes.ok) {
+            const elfPayload = await elfRes.json();
+            if (elfPayload && elfPayload.is_elf) {
+                if (elfTabBtn) elfTabBtn.classList.remove('hidden');
+                renderElfInformationUI(elfPayload);
+            } else if (elfTabBtn) {
+                elfTabBtn.classList.add('hidden');
+            }
+        }
+    } catch (err) {
+        if (elfTabBtn) elfTabBtn.classList.add('hidden');
+    }
+
+    try {
+        const machoRes = await fetch(`${CONFIG.PROJECTS_API_URL}/${projectId}/files/${fileMeta.file_id}/macho`);
+        if (machoRes.ok) {
+            const machoPayload = await machoRes.json();
+            if (machoPayload && machoPayload.is_macho) {
+                if (machoTabBtn) machoTabBtn.classList.remove('hidden');
+                renderMachoInformationUI(machoPayload);
+            } else if (machoTabBtn) {
+                machoTabBtn.classList.add('hidden');
+            }
+        }
+    } catch (err) {
+        if (machoTabBtn) machoTabBtn.classList.add('hidden');
+    }
+}
+
+/**
+ * Renders PE Information Tab UI elements.
+ */
+function renderPeInformationUI(peData) {
+    const summary = peData.summary || {};
+    
+    document.getElementById('pe-val-arch').textContent = summary.architecture || 'N/A';
+    document.getElementById('pe-val-subsystem').textContent = summary.subsystem || 'N/A';
+    document.getElementById('pe-val-entrypoint').textContent = summary.entry_point || '0x00000000';
+    document.getElementById('pe-val-imagebase').textContent = summary.image_base || '0x00000000';
+    document.getElementById('pe-val-timestamp').textContent = summary.timestamp_iso || 'N/A';
+    document.getElementById('pe-val-sections-count').textContent = summary.number_of_sections || 0;
+    document.getElementById('pe-val-import-count').textContent = `${summary.imported_dll_count || 0} DLLs (${summary.total_import_count || 0} functions)`;
+    document.getElementById('pe-val-export-count').textContent = summary.export_count || 0;
+
+    // Render Section Table
+    const tbody = document.getElementById('pe-sections-tbody');
+    if (tbody) {
+        tbody.innerHTML = '';
+        const sections = peData.sections || [];
+        
+        if (sections.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-muted);">No sections found</td></tr>`;
+        } else {
+            sections.forEach(sec => {
+                const tr = document.createElement('tr');
+                const entropyVal = typeof sec.entropy === 'number' ? sec.entropy : 0;
+                
+                tr.innerHTML = `
+                    <td class="font-mono cyan-text"><strong>${escapeHtml(sec.name)}</strong></td>
+                    <td class="font-mono">${formatFileSize(sec.virtual_size)}</td>
+                    <td class="font-mono">${formatFileSize(sec.raw_size)}</td>
+                    <td class="font-mono">${sec.virtual_address}</td>
+                    <td class="font-mono">
+                        <div class="table-entropy-cell">
+                            <span>${entropyVal.toFixed(2)}</span>
+                            <div class="mini-entropy-bar"><div class="mini-entropy-fill" style="width: ${(entropyVal / 8.0) * 100}%;"></div></div>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+    }
+
+    // Render Imported DLLs List
+    const importsList = document.getElementById('pe-imports-list');
+    if (importsList) {
+        importsList.innerHTML = '';
+        const imports = peData.imports || [];
+
+        if (imports.length === 0) {
+            importsList.innerHTML = `<div class="pe-empty-notice">No imported DLLs recorded.</div>`;
+        } else {
+            imports.forEach(imp => {
+                const item = document.createElement('div');
+                item.className = 'pe-import-card';
+
+                const funcsCount = imp.functions ? imp.functions.length : 0;
+                const funcsSample = (imp.functions || []).slice(0, 10).map(f => f.name || `Ordinal #${f.ordinal}`).join(', ');
+                const truncatedHint = funcsCount > 10 ? `... (+${funcsCount - 10} more)` : '';
+
+                item.innerHTML = `
+                    <div class="pe-import-header">
+                        <span class="pe-dll-name font-mono">${escapeHtml(imp.dll)}</span>
+                        <span class="badge-tag cyan">${funcsCount} functions</span>
+                    </div>
+                    <div class="pe-import-funcs-sample font-mono">${escapeHtml(funcsSample)}${truncatedHint}</div>
+                `;
+                importsList.appendChild(item);
+            });
+        }
+    }
+}
+
+/**
+ * Renders ELF Information Tab UI elements.
+ */
+function renderElfInformationUI(elfData) {
+    const summary = elfData.summary || {};
+    
+    document.getElementById('elf-val-arch').textContent = summary.architecture || 'N/A';
+    document.getElementById('elf-val-type').textContent = summary.type || 'N/A';
+    document.getElementById('elf-val-bitness').textContent = `${summary.bitness || 0}-bit (${summary.endianness || 'N/A'})`;
+    document.getElementById('elf-val-osabi').textContent = summary.os_abi || 'N/A';
+    document.getElementById('elf-val-entrypoint').textContent = summary.entry_point || '0x00000000';
+    document.getElementById('elf-val-interp').textContent = elfData.interpreter || 'None';
+    document.getElementById('elf-val-sections-count').textContent = summary.section_count || 0;
+    document.getElementById('elf-val-needed-count').textContent = summary.needed_libraries_count || 0;
+
+    // Render ELF Section Table
+    const tbody = document.getElementById('elf-sections-tbody');
+    if (tbody) {
+        tbody.innerHTML = '';
+        const sections = elfData.section_headers || [];
+
+        if (sections.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-muted);">No section headers found</td></tr>`;
+        } else {
+            sections.forEach(sec => {
+                const tr = document.createElement('tr');
+                const entropyVal = typeof sec.entropy === 'number' ? sec.entropy : 0;
+                
+                tr.innerHTML = `
+                    <td class="font-mono cyan-text"><strong>${escapeHtml(sec.name || '.unnamed')}</strong></td>
+                    <td class="font-mono">${escapeHtml(sec.type)}</td>
+                    <td class="font-mono">${sec.address}</td>
+                    <td class="font-mono">${formatFileSize(sec.size)}</td>
+                    <td class="font-mono">
+                        <div class="table-entropy-cell">
+                            <span>${entropyVal.toFixed(2)}</span>
+                            <div class="mini-entropy-bar"><div class="mini-entropy-fill" style="width: ${(entropyVal / 8.0) * 100}%;"></div></div>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+    }
+
+    // Render ELF Needed Libraries List
+    const libsList = document.getElementById('elf-libraries-list');
+    if (libsList) {
+        libsList.innerHTML = '';
+        const libs = elfData.dynamic_libraries || [];
+
+        if (libs.length === 0) {
+            libsList.innerHTML = `<div class="pe-empty-notice">No DT_NEEDED dynamic libraries recorded.</div>`;
+        } else {
+            libs.forEach(lib => {
+                const item = document.createElement('div');
+                item.className = 'pe-import-card';
+                item.innerHTML = `<div class="pe-import-header"><span class="pe-dll-name font-mono">${escapeHtml(lib)}</span></div>`;
+                libsList.appendChild(item);
+            });
+        }
+    }
+}
+
+/**
+ * Renders Mach-O Information Tab UI elements.
+ */
+function renderMachoInformationUI(machoData) {
+    const summary = machoData.summary || {};
+
+    document.getElementById('macho-val-arch').textContent = summary.architecture || 'N/A';
+    document.getElementById('macho-val-filetype').textContent = summary.file_type || 'N/A';
+    document.getElementById('macho-val-entrypoint').textContent = summary.entry_point || '0x00000000';
+    document.getElementById('macho-val-uuid').textContent = summary.uuid || 'N/A';
+    document.getElementById('macho-val-segment-count').textContent = summary.segment_count || 0;
+    document.getElementById('macho-val-section-count').textContent = summary.section_count || 0;
+    document.getElementById('macho-val-dylib-count').textContent = summary.dylib_count || 0;
+    document.getElementById('macho-val-symbol-count').textContent = summary.symbol_count || 0;
+
+    // Render Mach-O Sections Table
+    const tbody = document.getElementById('macho-sections-tbody');
+    if (tbody) {
+        tbody.innerHTML = '';
+        const sections = machoData.sections || [];
+
+        if (sections.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-muted);">No sections found</td></tr>`;
+        } else {
+            sections.forEach(sec => {
+                const tr = document.createElement('tr');
+                const entropyVal = typeof sec.entropy === 'number' ? sec.entropy : 0;
+
+                tr.innerHTML = `
+                    <td class="font-mono cyan-text"><strong>${escapeHtml(sec.section_name)}</strong></td>
+                    <td class="font-mono">${escapeHtml(sec.segment_name)}</td>
+                    <td class="font-mono">${sec.address}</td>
+                    <td class="font-mono">${formatFileSize(sec.size)}</td>
+                    <td class="font-mono">
+                        <div class="table-entropy-cell">
+                            <span>${entropyVal.toFixed(2)}</span>
+                            <div class="mini-entropy-bar"><div class="mini-entropy-fill" style="width: ${(entropyVal / 8.0) * 100}%;"></div></div>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+    }
+
+    // Render Mach-O Dynamic Libraries List
+    const dylibList = document.getElementById('macho-libraries-list');
+    if (dylibList) {
+        dylibList.innerHTML = '';
+        const dylibs = machoData.dynamic_libraries || [];
+
+        if (dylibs.length === 0) {
+            dylibList.innerHTML = `<div class="pe-empty-notice">No LC_LOAD_DYLIB dynamic libraries recorded.</div>`;
+        } else {
+            dylibs.forEach(lib => {
+                const item = document.createElement('div');
+                item.className = 'pe-import-card';
+                item.innerHTML = `<div class="pe-import-header"><span class="pe-dll-name font-mono">${escapeHtml(lib)}</span></div>`;
+                dylibList.appendChild(item);
+            });
+        }
+    }
+}
+
+/**
+ * Switches File Details Modal Tabs.
+ */
+function switchFileModalTab(targetTabId) {
+    if (!fileDetailsModal) return;
+
+    const tabBtns = fileDetailsModal.querySelectorAll('.modal-tab-btn');
+    const tabPanes = fileDetailsModal.querySelectorAll('.modal-tab-pane');
+
+    tabBtns.forEach(btn => {
+        if (btn.dataset.tab === targetTabId) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    tabPanes.forEach(pane => {
+        if (pane.id === targetTabId) {
+            pane.classList.remove('hidden');
+            pane.classList.add('active');
+        } else {
+            pane.classList.add('hidden');
+            pane.classList.remove('active');
+        }
+    });
+}
+
+function closeFileDetailsModal() {
+    if (fileDetailsModal) fileDetailsModal.classList.add('hidden');
+}
+
+/**
+ * Setup Event Listeners for Modals and Workspace Controls.
+ */
+function setupWorkspaceListeners() {
+    if (newProjectBtn) newProjectBtn.addEventListener('click', openCreateProjectModal);
+
+    const closeCreateBtn = document.getElementById('close-create-project-modal');
+    const cancelCreateBtn = document.getElementById('cancel-create-project');
+    if (closeCreateBtn) closeCreateBtn.addEventListener('click', closeCreateProjectModal);
+    if (cancelCreateBtn) cancelCreateBtn.addEventListener('click', closeCreateProjectModal);
+
+    if (createProjectForm) createProjectForm.addEventListener('submit', handleCreateProjectSubmit);
+
+    const closeFileBtn = document.getElementById('close-file-modal');
+    if (closeFileBtn) closeFileBtn.addEventListener('click', closeFileDetailsModal);
+
+    // Modal Tab Click Delegator
+    if (fileDetailsModal) {
+        fileDetailsModal.addEventListener('click', (e) => {
+            const tabBtn = e.target.closest('.modal-tab-btn');
+            if (tabBtn && tabBtn.dataset.tab) {
+                switchFileModalTab(tabBtn.dataset.tab);
+            }
+        });
+    }
+
+    // Copy hash button delegator
+    if (fileDetailsModal) {
+        fileDetailsModal.addEventListener('click', (e) => {
+            const btn = e.target.closest('.copy-hash-btn');
+            if (!btn) return;
+            const targetId = btn.dataset.hashTarget;
+            if (!targetId) return;
+            const targetElem = document.getElementById(targetId);
+            if (targetElem && targetElem.textContent && targetElem.textContent !== '---') {
+                navigator.clipboard.writeText(targetElem.textContent.trim());
+                alert(`Hash copied to clipboard!`);
+            }
+        });
+    }
+
+    const attachBtn = document.getElementById('btn-attach-to-chat');
+    if (attachBtn) {
+        attachBtn.addEventListener('click', () => {
+            if (selectedFileMeta) {
+                attachFileReferenceToPrompt(selectedFileMeta.filename, selectedFileMeta.file_id);
+                closeFileDetailsModal();
+            }
+        });
+    }
+
+    const downloadBtn = document.getElementById('btn-download-file');
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', () => {
+            if (selectedFileProjectId && selectedFileMeta) {
+                window.open(`${CONFIG.PROJECTS_API_URL}/${selectedFileProjectId}/files/${selectedFileMeta.file_id}`);
+            }
+        });
+    }
+
+    const renameBtn = document.getElementById('btn-rename-file');
+    if (renameBtn) {
+        renameBtn.addEventListener('click', async () => {
+            if (!selectedFileProjectId || !selectedFileMeta) return;
+            const newName = prompt('Enter new display filename:', selectedFileMeta.filename);
+            if (newName && newName.trim()) {
+                try {
+                    const res = await fetch(`${CONFIG.PROJECTS_API_URL}/${selectedFileProjectId}/files/${selectedFileMeta.file_id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ new_filename: newName.trim() })
+                    });
+                    if (res.ok) {
+                        const updated = await res.json();
+                        selectedFileMeta = updated;
+                        document.getElementById('modal-file-display-name').textContent = updated.filename;
+                        await fetchProjectsList();
+                    }
+                } catch (err) {
+                    console.error('Rename failed:', err);
+                }
+            }
+        });
+    }
+
+    const deleteFileBtn = document.getElementById('btn-delete-file');
+    if (deleteFileBtn) {
+        deleteFileBtn.addEventListener('click', async () => {
+            if (!selectedFileProjectId || !selectedFileMeta) return;
+            const confirmDel = confirm(`Delete file '${selectedFileMeta.filename}' from project workspace?`);
+            if (confirmDel) {
+                try {
+                    const res = await fetch(`${CONFIG.PROJECTS_API_URL}/${selectedFileProjectId}/files/${selectedFileMeta.file_id}`, {
+                        method: 'DELETE'
+                    });
+                    if (res.ok) {
+                        closeFileDetailsModal();
+                        await fetchProjectsList();
+                    }
+                } catch (err) {
+                    console.error('Delete file failed:', err);
+                }
+            }
+        });
+    }
+
+    // Hidden input file listeners for project uploads
+    const projFileInput = document.getElementById('project-file-input');
+    if (projFileInput) {
+        projFileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                const targetProjId = projFileInput.dataset.targetProjectId || activeProjectId;
+                Array.from(e.target.files).forEach(f => uploadFileToWorkspace(f, targetProjId));
+            }
+        });
+    }
+}
+
+/* ==========================================================================
+   Chat & Message Rendering Logic
+   ========================================================================== */
+
+function appendMessagePlaceholder(sender, isUser = false, timestamp = null) {
     const messageElement = document.createElement('div');
     messageElement.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
 
@@ -80,7 +1246,7 @@ function appendMessagePlaceholder(sender, isUser = false) {
 
     const timeSpan = document.createElement('span');
     timeSpan.className = 'message-time';
-    timeSpan.textContent = getCurrentTimestamp();
+    timeSpan.textContent = timestamp || getCurrentTimestamp();
 
     headerElement.appendChild(senderSpan);
     headerElement.appendChild(timeSpan);
@@ -97,172 +1263,396 @@ function appendMessagePlaceholder(sender, isUser = false) {
     return contentElement;
 }
 
-/**
- * Creates and appends a static chat message element to the DOM safely.
- * @param {string} sender - Identifier for sender ('User' or 'Assistant')
- * @param {string} content - Message text content
- * @param {boolean} isUser - True if sender is user, false if assistant
- */
-function appendMessage(sender, content, isUser = false) {
-    const contentElement = appendMessagePlaceholder(sender, isUser);
-    contentElement.textContent = content;
+function renderMarkdown(markdownText) {
+    if (!markdownText) return '';
+    let rawHtml = markdownText;
+    if (window.marked && typeof window.marked.parse === 'function') {
+        rawHtml = window.marked.parse(markdownText);
+    } else {
+        return `<p>${escapeHtml(markdownText)}</p>`;
+    }
+    if (window.DOMPurify && typeof window.DOMPurify.sanitize === 'function') {
+        return window.DOMPurify.sanitize(rawHtml);
+    }
+    return escapeHtml(markdownText);
 }
 
-/**
- * Sends prompt text to backend streaming endpoint and yields tokens in real time via SSE.
- * @param {string} userMessage - Text prompt submitted by user
- * @param {function(string): void} onChunkCallback - Called on each received token chunk
- */
-async function fetchAiResponseStream(userMessage, onChunkCallback) {
-    const response = await fetch(CONFIG.STREAM_API_URL, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ message: userMessage })
-    });
+function formatLangName(lang) {
+    if (!lang) return 'Code';
+    const l = lang.toLowerCase().trim();
+    const map = {
+        'js': 'JavaScript', 'py': 'Python', 'c': 'C', 'cpp': 'C++', 'json': 'JSON', 'sql': 'SQL', 'sh': 'Shell', 'asm': 'Assembly'
+    };
+    return map[l] || (l.charAt(0).toUpperCase() + l.slice(1));
+}
 
-    if (!response.ok) {
-        throw new Error(`Server returned error status: ${response.status}`);
-    }
+function wrapCodeBlocksWithHeader(containerElement) {
+    if (!containerElement) return;
+    const preElements = containerElement.querySelectorAll('pre');
+    preElements.forEach((preElement) => {
+        if (preElement.parentElement.classList.contains('code-block-wrapper')) return;
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-
-    while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine.startsWith('data:')) continue;
-
-            const jsonStr = trimmedLine.slice(5).trim();
-            if (!jsonStr) continue;
-
-            try {
-                const parsed = JSON.parse(jsonStr);
-
-                if (parsed.error) {
-                    throw new Error(parsed.error);
+        const codeElement = preElement.querySelector('code');
+        let language = '';
+        if (codeElement) {
+            codeElement.classList.forEach((className) => {
+                if (className.startsWith('language-')) {
+                    language = className.replace('language-', '');
                 }
-
-                if (parsed.content) {
-                    onChunkCallback(parsed.content);
-                }
-
-                if (parsed.done) {
-                    return;
-                }
-            } catch (err) {
-                if (err.message && !err.message.includes('Unexpected token')) {
-                    throw err;
-                }
-            }
+            });
         }
-    }
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'code-block-wrapper';
+
+        const header = document.createElement('div');
+        header.className = 'code-block-header';
+
+        const langSpan = document.createElement('span');
+        langSpan.className = 'code-block-lang';
+        langSpan.textContent = formatLangName(language);
+
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'copy-code-btn';
+        copyBtn.setAttribute('aria-label', 'Copy code snippet to clipboard');
+        copyBtn.innerHTML = `
+            <svg class="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span class="copy-text">Copy code</span>
+        `;
+
+        header.appendChild(langSpan);
+        header.appendChild(copyBtn);
+
+        preElement.parentNode.insertBefore(wrapper, preElement);
+        wrapper.appendChild(header);
+        wrapper.appendChild(preElement);
+
+        if (window.hljs && codeElement && !codeElement.classList.contains('hljs')) {
+            window.hljs.highlightElement(codeElement);
+        }
+    });
 }
 
-/**
- * Handles message submission lifecycle with real-time SSE streaming.
- * @param {string} messageText - Input text from user
- */
-async function handleUserSubmit(messageText) {
-    // Render User Message
-    appendMessage('You', messageText, true);
+function appendMessage(sender, text, isUser = false, timestamp = null) {
+    const contentElement = appendMessagePlaceholder(sender, isUser, timestamp);
+    contentElement.innerHTML = renderMarkdown(text);
+    wrapCodeBlocksWithHeader(contentElement);
+    updateWelcomeScreenState();
+    scrollToBottom();
+}
 
-    // Clear Textarea
-    promptInput.value = '';
-    promptInput.style.height = 'auto';
+function updateWelcomeScreenState() {
+    const emptyScreen = document.getElementById('empty-chat-screen');
+    if (!emptyScreen) return;
+    const hasMessages = messagesList && messagesList.children.length > 0;
+    emptyScreen.style.display = hasMessages ? 'none' : 'flex';
+}
 
-    // Set UI Loading State
+function setupCopyButtonListener() {
+    if (!messagesList) return;
+    messagesList.addEventListener('click', (event) => {
+        const copyBtn = event.target.closest('.copy-code-btn');
+        if (!copyBtn) return;
+
+        const wrapper = copyBtn.closest('.code-block-wrapper');
+        if (!wrapper) return;
+
+        const codeElement = wrapper.querySelector('pre code') || wrapper.querySelector('pre');
+        if (!codeElement) return;
+
+        const codeText = codeElement.innerText || codeElement.textContent;
+        navigator.clipboard.writeText(codeText)
+            .then(() => {
+                const copyTextSpan = copyBtn.querySelector('.copy-text');
+                const originalText = copyTextSpan ? copyTextSpan.textContent : 'Copy code';
+                if (copyTextSpan) copyTextSpan.textContent = 'Copied!';
+                copyBtn.classList.add('copied');
+
+                setTimeout(() => {
+                    if (copyTextSpan) copyTextSpan.textContent = originalText;
+                    copyBtn.classList.remove('copied');
+                }, 2000);
+            })
+            .catch((err) => console.error('Failed to copy code:', err));
+    });
+}
+
+async function fetchAiResponse(promptText) {
+    abortActiveStream();
+    activeStreamController = new AbortController();
+
     setFormDisabledState(true);
     updateStatus(CONFIG.STATUS.THINKING);
 
-    // Create Assistant Message Placeholder element for streaming
-    const assistantContentEl = appendMessagePlaceholder('EKKI-RE-AI', false);
+    const assistantContentElement = appendMessagePlaceholder('Assistant', false);
+    let rawAccumulatedText = '';
+    let pendingRenderText = '';
+
+    const processBuffer = () => {
+        if (pendingRenderText !== rawAccumulatedText) {
+            pendingRenderText = rawAccumulatedText;
+            assistantContentElement.innerHTML = renderMarkdown(pendingRenderText);
+            wrapCodeBlocksWithHeader(assistantContentElement);
+            scrollToBottom();
+        }
+        activeRenderFrameId = null;
+    };
+
+    const scheduleRender = () => {
+        if (!activeRenderFrameId) {
+            activeRenderFrameId = requestAnimationFrame(processBuffer);
+        }
+    };
 
     try {
-        await fetchAiResponseStream(messageText, (chunk) => {
-            assistantContentEl.textContent += chunk;
-            scrollToBottom();
+        const response = await fetch(CONFIG.ORCHESTRATE_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: promptText,
+                session_id: activeConversationId || 'default'
+            }),
+            signal: activeStreamController.signal
         });
 
-        updateStatus(CONFIG.STATUS.READY);
-    } catch (error) {
-        console.error('API Interaction Error:', error);
-
-        // Remove empty placeholder if nothing was streamed yet
-        if (!assistantContentEl.textContent && assistantContentEl.parentElement) {
-            assistantContentEl.parentElement.remove();
+        if (!response.ok) {
+            throw new Error(`Server returned error status ${response.status}`);
         }
 
-        appendMessage(
-            'System Error',
-            'Unable to connect to local AI service. Ensure FastAPI & Ollama server are running.',
-            false
-        );
-        updateStatus(CONFIG.STATUS.ERROR);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
 
-        setTimeout(() => updateStatus(CONFIG.STATUS.READY), 4000);
-    } finally {
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.startsWith('data:')) continue;
+                const dataStr = trimmed.slice(5).trim();
+
+                if (dataStr === '[DONE]') break;
+
+                try {
+                    const parsed = JSON.parse(dataStr);
+                    if (parsed.content) {
+                        rawAccumulatedText += parsed.content;
+                        scheduleRender();
+                    } else if (parsed.error) {
+                        rawAccumulatedText += `\n\n**Error:** ${parsed.error}`;
+                        scheduleRender();
+                    }
+                } catch (e) {
+                    console.warn('Failed to parse SSE JSON chunk:', dataStr);
+                }
+            }
+        }
+
+        if (activeRenderFrameId) cancelAnimationFrame(activeRenderFrameId);
+        processBuffer();
+
+        if (activeConversationId) {
+            const currentConv = conversations.find(c => c.id === activeConversationId);
+            if (currentConv) {
+                currentConv.messages.push({ sender: 'Assistant', content: rawAccumulatedText, isUser: false, timestamp: getCurrentTimestamp() });
+                saveStateToStorage();
+            }
+        }
+
         setFormDisabledState(false);
-        promptInput.focus();
+        updateStatus(CONFIG.STATUS.READY);
+
+    } catch (error) {
+        if (error.name === 'AbortError') return;
+
+        if (activeRenderFrameId) cancelAnimationFrame(activeRenderFrameId);
+        assistantContentElement.innerHTML = `<p style="color: var(--status-danger);"><strong>Error:</strong> Failed to connect to local AI assistant API.</p>`;
+        setFormDisabledState(false);
+        updateStatus(CONFIG.STATUS.ERROR);
+    } finally {
+        activeStreamController = null;
     }
 }
 
-/**
- * Form Submit Event Handler
- * @param {Event} event - Submit Event Object
- */
+function handleUserSubmit(promptText) {
+    if (!activeConversationId) {
+        activeConversationId = `conv-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+        const newConv = {
+            id: activeConversationId,
+            title: generateTitleFromPrompt(promptText),
+            createdAt: new Date().toISOString(),
+            messages: []
+        };
+        conversations.unshift(newConv);
+        saveStateToStorage();
+        renderSidebarList();
+    } else {
+        const currentConv = conversations.find(c => c.id === activeConversationId);
+        if (currentConv && currentConv.messages.length === 0) {
+            currentConv.title = generateTitleFromPrompt(promptText);
+            saveStateToStorage();
+            renderSidebarList();
+        }
+    }
+
+    const currentConv = conversations.find(c => c.id === activeConversationId);
+    if (currentConv) {
+        currentConv.messages.push({ sender: 'User', content: promptText, isUser: true, timestamp: getCurrentTimestamp() });
+        saveStateToStorage();
+    }
+
+    appendMessage('User', promptText, true);
+
+    if (promptInput) promptInput.value = '';
+    autoResizeInput();
+
+    fetchAiResponse(promptText);
+}
+
 function onFormSubmit(event) {
     event.preventDefault();
-
-    const trimmedInput = promptInput.value.trim();
+    const rawInput = promptInput ? promptInput.value : '';
+    const trimmedInput = rawInput.trim();
     if (!trimmedInput) return;
-
+    updateWelcomeScreenState();
     handleUserSubmit(trimmedInput);
 }
 
-/**
- * Keyboard Shortcuts Handler (Allows Enter to submit, Shift+Enter for newline)
- * @param {KeyboardEvent} event 
- */
 function onInputKeyDown(event) {
+    event.preventDefault ? null : null;
     if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
         chatForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
     }
 }
 
-/**
- * Automatically adjusts textarea height to match content.
- */
 function autoResizeInput() {
+    if (!promptInput) return;
     promptInput.style.height = 'auto';
     promptInput.style.height = `${promptInput.scrollHeight}px`;
 }
 
-/**
- * Application Entry Point & Listener Registration
- */
+function setupTelemetryDashboard() {
+    const monitorBtn = document.getElementById('monitor-toggle-btn');
+    const closeBtn = document.getElementById('close-monitor-btn');
+    const dashboard = document.getElementById('status-dashboard');
+
+    if (!monitorBtn || !dashboard) return;
+
+    const toggle = () => dashboard.classList.toggle('open');
+    monitorBtn.addEventListener('click', toggle);
+    if (closeBtn) closeBtn.addEventListener('click', () => dashboard.classList.remove('open'));
+
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            toggle();
+        }
+    });
+}
+
+async function fetchHealthTelemetry() {
+    const connVal = document.getElementById('telemetry-conn-val');
+    const modelVal = document.getElementById('telemetry-model-val');
+    const connDot = document.getElementById('telemetry-conn-dot');
+
+    try {
+        const res = await fetch('http://127.0.0.1:8000/health');
+        if (res.ok) {
+            const data = await res.json();
+            if (connVal) connVal.textContent = '127.0.0.1:8000 (Healthy)';
+            if (modelVal) modelVal.textContent = data.model || 'mannix-re:latest';
+            if (connDot) connDot.className = 'telemetry-status-dot connected';
+        }
+    } catch (e) {
+        if (connVal) connVal.textContent = '127.0.0.1:8000 (Offline)';
+        if (connDot) connDot.className = 'telemetry-status-dot';
+    }
+}
+
+function setupDragAndDropZone() {
+    const dropzoneOverlay = document.getElementById('dropzone-overlay');
+    const fileUploadBtn = document.getElementById('file-upload-btn');
+    const fileInput = document.getElementById('file-input');
+
+    if (!dropzoneOverlay || !promptInput) return;
+
+    let dragTimer;
+
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzoneOverlay.classList.add('drag-active');
+        clearTimeout(dragTimer);
+    });
+
+    window.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dragTimer = setTimeout(() => dropzoneOverlay.classList.remove('drag-active'), 100);
+    });
+
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzoneOverlay.classList.remove('drag-active');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            Array.from(e.dataTransfer.files).forEach(f => uploadFileToWorkspace(f));
+        }
+    });
+
+    if (fileUploadBtn && fileInput) {
+        fileUploadBtn.addEventListener('click', () => {
+            if (!activeProjectId) {
+                openCreateProjectModal();
+            } else {
+                fileInput.click();
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                Array.from(e.target.files).forEach(f => uploadFileToWorkspace(f));
+            }
+        });
+    }
+}
+
 function init() {
-    if (chatForm) {
-        chatForm.addEventListener('submit', onFormSubmit);
+    if (window.marked && typeof window.marked.setOptions === 'function') {
+        window.marked.setOptions({ gfm: true, breaks: true });
     }
 
+    loadStateFromStorage();
+    setupSidebarListeners();
+    setupWorkspaceListeners();
+    setupCopyButtonListener();
+    setupTelemetryDashboard();
+    setupDragAndDropZone();
+
+    renderSidebarList();
+    fetchProjectsList();
+
+    if (activeConversationId) {
+        loadConversation(activeConversationId);
+    }
+    updateWelcomeScreenState();
+
+    if (chatForm) chatForm.addEventListener('submit', onFormSubmit);
     if (promptInput) {
         promptInput.addEventListener('keydown', onInputKeyDown);
         promptInput.addEventListener('input', autoResizeInput);
     }
 
+    fetchHealthTelemetry();
+    setInterval(fetchHealthTelemetry, 15000);
     updateStatus(CONFIG.STATUS.READY);
 }
 
-// Initialize application when DOM is completely loaded
 document.addEventListener('DOMContentLoaded', init);

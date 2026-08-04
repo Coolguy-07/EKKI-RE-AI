@@ -125,7 +125,7 @@ AI Client
 Ollama
       │
       ▼
-Qwen3:8B
+Mannix-RE:latest
 ```
 
 The backend currently exposes a REST API that forwards prompts to the local Ollama server and returns generated responses.
@@ -323,7 +323,7 @@ Completed:
 - Virtual environment
 - FastAPI backend
 - Ollama integration
-- Qwen3 integration
+- Mannix-RE integration
 - REST API
 - Swagger documentation
 - Configuration management

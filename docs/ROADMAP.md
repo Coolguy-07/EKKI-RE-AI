@@ -37,7 +37,7 @@ Build the minimum working backend capable of communicating with a local language
 - [x] Create FastAPI backend
 - [x] Create configuration system
 - [x] Integrate Ollama
-- [x] Integrate Qwen3:8B
+- [x] Integrate Mannix-RE:latest
 - [x] Create AI client
 - [x] Create REST API
 - [x] Create Swagger documentation

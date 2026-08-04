@@ -1,6 +1,6 @@
 # EKKI-RE-AI
 
-> A local AI-powered Reverse Engineering Assistant built with FastAPI, Ollama, and Qwen.
+> A local AI-powered Reverse Engineering Assistant built with FastAPI, Ollama, and Mannix-RE.
 
 ---
 
@@ -49,7 +49,7 @@ Current Development Phase:
 Completed components:
 
 - Local Ollama integration
-- Qwen3:8B model integration
+- Mannix-RE:latest model integration
 - FastAPI backend
 - REST API
 - Swagger UI
@@ -107,7 +107,7 @@ Backend
 AI
 
 - Ollama
-- Qwen3:8B
+- Mannix-RE:latest
 
 Development
 
@@ -198,7 +198,7 @@ ollama serve
 Run the model
 
 ```bash
-ollama run qwen3:8b
+ollama run mannix-re:latest
 ```
 
 Start the API
@@ -235,7 +235,7 @@ Example Response
 
 ```json
 {
-  "response": "Hello! I'm Qwen..."
+  "response": "Hello! I'm Mannix-RE..."
 }
 ```
 
