@@ -23,3 +23,13 @@ venv/
 # Operating system files
 .DS_Store
 Thumbs.db
+
+# Runtime workspace data
+projects/
+
+# Python caches
+.pytest_cache/
+.mypy_cache/
+
+# IDE
+.idea/
