@@ -351,5 +351,9 @@ class FileDetector:
         if any(pat in text_sample for pat in ["public class ", "import java.", "package "]) or ext == ".java":
             return ("Java Source Code", "N/A", None)
 
-        # 10. Default Text
+        # 10. Markdown Document Detection
+        if ext in (".md", ".markdown") or stripped.startswith(("# ", "## ", "### ", "#### ")) or "```" in stripped:
+            return ("Markdown Document", "N/A", None)
+
+        # 11. Default Text
         return ("Text Document", "N/A", None)

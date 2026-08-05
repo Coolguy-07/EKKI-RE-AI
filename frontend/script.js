@@ -773,52 +773,46 @@ async function openFileDetailsModal(projectId, fileMeta) {
     document.getElementById('modal-file-size').textContent = formatFileSize(fileMeta.size_bytes);
     document.getElementById('modal-file-mime').textContent = fileMeta.mime_type || 'application/octet-stream';
     
-    // Set fallback initial UI values while fetching extended metadata
-    document.getElementById('modal-file-sha256').textContent = fileMeta.sha256;
-    document.getElementById('modal-detected-type').textContent = fileMeta.metadata && fileMeta.metadata.detected_type ? fileMeta.metadata.detected_type : 'Detecting...';
-    document.getElementById('modal-detected-arch').textContent = fileMeta.metadata && fileMeta.metadata.detected_architecture ? fileMeta.metadata.detected_architecture : 'N/A';
-    document.getElementById('modal-analysis-status').textContent = fileMeta.metadata && fileMeta.metadata.status ? fileMeta.metadata.status : 'analyzed';
+    // 1. Initial UI binding from cached fileMeta.metadata (if valid and non-empty)
+    const hasValidCachedMetadata = Boolean(
+        fileMeta &&
+        fileMeta.metadata &&
+        typeof fileMeta.metadata === 'object' &&
+        Object.keys(fileMeta.metadata).length > 0 &&
+        fileMeta.metadata.md5
+    );
+
+    if (hasValidCachedMetadata) {
+        renderGeneralMetadata({
+            ...fileMeta.metadata,
+            sha256: fileMeta.metadata.sha256 || fileMeta.sha256
+        });
+    } else {
+        document.getElementById('modal-file-sha256').textContent = fileMeta.sha256 || '---';
+        document.getElementById('modal-detected-type').textContent = 'Detecting...';
+        document.getElementById('modal-detected-arch').textContent = 'N/A';
+        document.getElementById('modal-file-md5').textContent = '---';
+        document.getElementById('modal-file-sha1').textContent = '---';
+        document.getElementById('modal-file-sha512').textContent = '---';
+        document.getElementById('modal-file-entropy').textContent = 'Analyzing...';
+        const entropyFill = document.getElementById('modal-entropy-fill');
+        if (entropyFill) entropyFill.style.width = '0%';
+        const statusBadge = document.getElementById('modal-analysis-status');
+        if (statusBadge) {
+            statusBadge.textContent = 'analyzing...';
+            statusBadge.className = 'badge-tag yellow';
+        }
+    }
 
     fileDetailsModal.classList.remove('hidden');
 
-    // 1. Fetch full versioned metadata from REST API endpoint
+    // 2. Fetch full versioned metadata from REST API endpoint
     try {
         const res = await fetch(`${CONFIG.PROJECTS_API_URL}/${projectId}/files/${fileMeta.file_id}/metadata`);
         if (res.ok) {
             const meta = await res.json();
-            
-            document.getElementById('modal-detected-type').textContent = meta.detected_type || 'Unknown';
-            document.getElementById('modal-detected-arch').textContent = meta.detected_architecture || 'N/A';
-            
-            const statusBadge = document.getElementById('modal-analysis-status');
-            if (statusBadge) {
-                statusBadge.textContent = meta.status || 'analyzed';
-                statusBadge.className = meta.status === 'failed' ? 'badge-tag red' : 'badge-tag green';
-            }
-
-            // Hashes
-            if (document.getElementById('modal-file-md5')) document.getElementById('modal-file-md5').textContent = meta.md5 || '---';
-            if (document.getElementById('modal-file-sha1')) document.getElementById('modal-file-sha1').textContent = meta.sha1 || '---';
-            if (document.getElementById('modal-file-sha256')) document.getElementById('modal-file-sha256').textContent = meta.sha256 || '---';
-            if (document.getElementById('modal-file-sha512')) document.getElementById('modal-file-sha512').textContent = meta.sha512 || '---';
-
-            // Entropy Calculation & Progress Bar Rendering
-            const entropyVal = typeof meta.entropy === 'number' ? meta.entropy : 0;
-            const entropyText = document.getElementById('modal-file-entropy');
-            const entropyFill = document.getElementById('modal-entropy-fill');
-            
-            if (entropyText) entropyText.textContent = `${entropyVal.toFixed(4)} / 8.0000`;
-            if (entropyFill) {
-                const percentage = Math.min(100, Math.max(0, (entropyVal / 8.0) * 100));
-                entropyFill.style.width = `${percentage}%`;
-
-                if (entropyVal > 7.2) {
-                    entropyFill.style.background = 'linear-gradient(90deg, #ff0055, #ff5500)';
-                } else if (entropyVal > 6.0) {
-                    entropyFill.style.background = 'linear-gradient(90deg, #ffaa00, #ffff00)';
-                } else {
-                    entropyFill.style.background = 'linear-gradient(90deg, #00f2fe, #4facfe)';
-                }
+            if (meta && (meta.md5 || meta.sha256)) {
+                renderGeneralMetadata(meta);
             }
         }
     } catch (err) {
@@ -873,6 +867,62 @@ async function openFileDetailsModal(projectId, fileMeta) {
         }
     } catch (err) {
         if (machoTabBtn) machoTabBtn.classList.add('hidden');
+    }
+}
+
+/**
+ * Renders General Metadata Tab UI elements.
+ */
+function renderGeneralMetadata(meta) {
+    if (!meta) return;
+
+    if (document.getElementById('modal-detected-type')) {
+        document.getElementById('modal-detected-type').textContent = meta.detected_type || 'Unknown';
+    }
+    if (document.getElementById('modal-detected-arch')) {
+        document.getElementById('modal-detected-arch').textContent = meta.detected_architecture || 'N/A';
+    }
+
+    const statusBadge = document.getElementById('modal-analysis-status');
+    if (statusBadge) {
+        statusBadge.textContent = meta.status || 'analyzed';
+        statusBadge.className = meta.status === 'failed' ? 'badge-tag red' : 'badge-tag green';
+    }
+
+    // Cryptographic Hashes (MD5, SHA-1, SHA-256, SHA-512)
+    if (document.getElementById('modal-file-md5')) {
+        document.getElementById('modal-file-md5').textContent = meta.md5 || '---';
+    }
+    if (document.getElementById('modal-file-sha1')) {
+        document.getElementById('modal-file-sha1').textContent = meta.sha1 || '---';
+    }
+    if (document.getElementById('modal-file-sha256')) {
+        document.getElementById('modal-file-sha256').textContent = meta.sha256 || '---';
+    }
+    if (document.getElementById('modal-file-sha512')) {
+        document.getElementById('modal-file-sha512').textContent = meta.sha512 || '---';
+    }
+
+    // Shannon Entropy Calculation & Progress Bar Rendering
+    const entropyVal = typeof meta.entropy === 'number' ? meta.entropy : 0;
+    const entropyText = document.getElementById('modal-file-entropy');
+    const entropyFill = document.getElementById('modal-entropy-fill');
+    
+    if (entropyText) {
+        entropyText.textContent = `${entropyVal.toFixed(4)} / 8.0000`;
+    }
+
+    if (entropyFill) {
+        const percentage = Math.min(100, Math.max(0, (entropyVal / 8.0) * 100));
+        entropyFill.style.width = `${percentage}%`;
+
+        if (entropyVal > 7.2) {
+            entropyFill.style.background = 'linear-gradient(90deg, #ff0055, #ff5500)';
+        } else if (entropyVal > 6.0) {
+            entropyFill.style.background = 'linear-gradient(90deg, #ffaa00, #ffff00)';
+        } else {
+            entropyFill.style.background = 'linear-gradient(90deg, #00f2fe, #4facfe)';
+        }
     }
 }
 

@@ -107,6 +107,35 @@ def test_high_entropy_random_bytes():
     assert res["entropy"] == 8.0
 
 
+def test_markdown_file_detection_and_entropy():
+    engine = BinaryIntelligenceEngine()
+    # 5.67 KB synthetic Markdown text payload
+    md_content = (
+        "# EKKI-RE-AI Reverse Engineering Report\n\n"
+        "## Summary of Binary Analysis\n\n"
+        "The uploaded binary file was analyzed using the universal intelligence pipeline.\n"
+        "- MD5: c4ca4238a0b923820dcc509a6f75849b\n"
+        "- SHA-256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n\n"
+        "```python\ndef analyze():\n    return 'Analyzed'\n```\n"
+    ).encode("utf-8") * 15  # ~5.67 KB
+
+    res = engine.analyze(
+        file_id="file-md-doc",
+        filename="README.md",
+        content=md_content,
+    )
+
+    assert res["file_size"] == len(md_content)
+    assert res["detected_type"] == "Markdown Document"
+    assert res["detected_architecture"] == "N/A"
+    assert res["status"] == "analyzed"
+    assert 4.0 < res["entropy"] < 6.0
+    assert len(res["md5"]) == 32
+    assert len(res["sha1"]) == 40
+    assert len(res["sha256"]) == 64
+    assert len(res["sha512"]) == 128
+
+
 # --- 2. Unit Tests: File Type Signature & Architecture Detection ---
 
 def test_pe_x86_64_detection():

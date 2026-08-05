@@ -14,6 +14,7 @@ from typing import Dict, List, Optional
 
 from .base import BaseAnalysisEngine
 from .binary_intelligence import BinaryIntelligenceEngine
+from .capstone_engine import CapstoneDisassemblyEngine
 from .elf_parser import ELFParserEngine
 from .macho_parser import MachOParserEngine
 from .models import BinaryMetadata, CURRENT_SCHEMA_VERSION
@@ -29,11 +30,15 @@ class AnalysisPipeline:
         self._engines: List[BaseAnalysisEngine] = []
         self._lock = threading.RLock()
 
-        # Register default core analysis engines
+        # Register default core analysis engines in execution order.
+        # BinaryIntelligenceEngine always runs first to populate detected_type.
+        # Format parsers run next to populate UnifiedExecutableModel.
+        # CapstoneDisassemblyEngine runs last — requires UnifiedExecutableModel from prior engines.
         self.register_engine(BinaryIntelligenceEngine())
         self.register_engine(PEParserEngine())
         self.register_engine(ELFParserEngine())
         self.register_engine(MachOParserEngine())
+        self.register_engine(CapstoneDisassemblyEngine())
 
     def register_engine(self, engine: BaseAnalysisEngine) -> None:
         """Registers a new AnalysisEngine implementation thread-safely."""
@@ -74,6 +79,26 @@ class AnalysisPipeline:
 
         for engine in engines_to_run:
             try:
+                # Call can_handle() if the engine implements it; default is True.
+                detected_type = (
+                    metadata_dict
+                    .get("engine_metadata", {})
+                    .get("binary_intelligence", {})
+                    .get("detected_type", "")
+                )
+                if hasattr(engine, "can_handle") and not engine.can_handle(
+                    content=content,
+                    detected_type=detected_type,
+                    existing_metadata=metadata_dict,
+                ):
+                    logger.debug(
+                        "Engine '%s' skipped for file_id='%s' (detected_type='%s')",
+                        engine.engine_name,
+                        file_id,
+                        detected_type,
+                    )
+                    continue
+
                 metadata_dict = engine.analyze(
                     file_id=file_id,
                     filename=filename,
@@ -121,6 +146,16 @@ class AnalysisPipeline:
                 macho_engine.save_macho_artifact(project_dir, file_id, engine_meta["macho_parser"]["parsed_data"])
             except Exception as err:
                 logger.error("Failed to persist macho.json artifact for file_id='%s': %s", file_id, err)
+
+        # Save artifact under analysis/{file_id}/disassembly.json if capstone output is present
+        if "capstone_disassembly" in engine_meta and "parsed_data" in engine_meta["capstone_disassembly"]:
+            try:
+                capstone_engine = CapstoneDisassemblyEngine()
+                capstone_engine.save_disassembly_artifact(
+                    project_dir, file_id, engine_meta["capstone_disassembly"]["parsed_data"]
+                )
+            except Exception as err:
+                logger.error("Failed to persist disassembly.json artifact for file_id='%s': %s", file_id, err)
 
         return validated_metadata
 

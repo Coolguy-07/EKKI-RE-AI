@@ -631,7 +631,12 @@ class WorkspaceManager:
                 try:
                     with open(metadata_json_path, "r", encoding="utf-8") as f:
                         data = json.load(f)
-                    return BinaryMetadata.model_validate(data)
+                    validated = BinaryMetadata.model_validate(data)
+                    # Sync cached file metadata in project index if missing or empty
+                    if safe_file_id in metadata.files and not metadata.files[safe_file_id].metadata:
+                        metadata.files[safe_file_id].metadata = validated.model_dump()
+                        self._save_metadata_unlocked(metadata)
+                    return validated
                 except Exception as err:
                     logger.warning("Corrupted analysis metadata JSON for file_id='%s': %s. Re-analyzing...", file_id, err)
 
