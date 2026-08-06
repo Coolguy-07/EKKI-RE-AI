@@ -868,6 +868,23 @@ async function openFileDetailsModal(projectId, fileMeta) {
     } catch (err) {
         if (machoTabBtn) machoTabBtn.classList.add('hidden');
     }
+
+    // 3. Fetch Disassembly payload
+    const disasmTabBtn = document.getElementById('tab-btn-disasm');
+    try {
+        const disasmRes = await fetch(`${CONFIG.PROJECTS_API_URL}/${projectId}/files/${fileMeta.file_id}/disassembly`);
+        if (disasmRes.ok) {
+            const disasmPayload = await disasmRes.json();
+            if (disasmPayload && disasmPayload.has_disassembly !== false && disasmPayload.total_instructions > 0) {
+                if (disasmTabBtn) disasmTabBtn.classList.remove('hidden');
+                renderDisassemblyUI(disasmPayload);
+            } else if (disasmTabBtn) {
+                disasmTabBtn.classList.add('hidden');
+            }
+        }
+    } catch (err) {
+        if (disasmTabBtn) disasmTabBtn.classList.add('hidden');
+    }
 }
 
 /**
@@ -1124,6 +1141,161 @@ function renderMachoInformationUI(machoData) {
                 item.className = 'pe-import-card';
                 item.innerHTML = `<div class="pe-import-header"><span class="pe-dll-name font-mono">${escapeHtml(lib)}</span></div>`;
                 dylibList.appendChild(item);
+            });
+        }
+    }
+}
+
+/**
+ * Renders Disassembly Tab UI elements (Phase 2.5).
+ */
+function renderDisassemblyUI(data) {
+    if (!data) return;
+
+    // Summary fields
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    };
+
+    setVal('disasm-val-arch', data.architecture || 'N/A');
+    setVal('disasm-val-bitness', data.bitness ? `${data.bitness}-bit` : 'N/A');
+    setVal('disasm-val-endian', data.endianness || 'N/A');
+    setVal('disasm-val-entry', data.entry_point_hex || '---');
+    setVal('disasm-val-capstone-ver', data.capstone_version || 'N/A');
+    setVal('disasm-val-exec-time', data.execution_time_ms ? `${data.execution_time_ms}ms` : '---');
+
+    // Statistics
+    setVal('disasm-val-total-insn', data.total_instructions || 0);
+    setVal('disasm-val-total-blocks', data.total_basic_blocks || 0);
+    setVal('disasm-val-total-loops', data.total_loops_detected || 0);
+
+    const sections = data.sections || {};
+    const sectionNames = Object.keys(sections);
+    setVal('disasm-val-sections-count', sectionNames.length);
+
+    // Sections summary table
+    const secTbody = document.getElementById('disasm-sections-tbody');
+    if (secTbody) {
+        secTbody.innerHTML = '';
+        if (sectionNames.length === 0) {
+            secTbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--text-muted);">No sections disassembled</td></tr>`;
+        } else {
+            sectionNames.forEach(name => {
+                const sec = sections[name];
+                const tr = document.createElement('tr');
+                const coveragePct = typeof sec.coverage_percent === 'number' ? sec.coverage_percent.toFixed(1) + '%' : 'N/A';
+                tr.innerHTML = `
+                    <td class="font-mono cyan-text"><strong>${escapeHtml(name)}</strong></td>
+                    <td class="font-mono">${sec.virtual_address_hex || '---'}</td>
+                    <td class="font-mono">${formatFileSize(sec.raw_size || 0)}</td>
+                    <td class="font-mono">${sec.total_instructions || 0}</td>
+                    <td class="font-mono">${sec.total_basic_blocks || 0}</td>
+                    <td class="font-mono">${sec.total_loops_detected || 0}</td>
+                    <td class="font-mono">${coveragePct}</td>
+                `;
+                secTbody.appendChild(tr);
+            });
+        }
+    }
+
+    // Instruction listing — render first section, capped at 500 instructions for DOM performance
+    const listingContainer = document.getElementById('disasm-listing-container');
+    const listingSectionLabel = document.getElementById('disasm-listing-section-name');
+    if (listingContainer) {
+        listingContainer.innerHTML = '';
+        const MAX_RENDER_INSTRUCTIONS = 500;
+        const firstSectionName = sectionNames[0];
+        if (firstSectionName && sections[firstSectionName]) {
+            const sec = sections[firstSectionName];
+            if (listingSectionLabel) listingSectionLabel.textContent = `(${firstSectionName})`;
+            const instructions = sec.instructions || [];
+            const renderCount = Math.min(instructions.length, MAX_RENDER_INSTRUCTIONS);
+
+            for (let i = 0; i < renderCount; i++) {
+                const insn = instructions[i];
+                const row = document.createElement('div');
+                row.className = 'disasm-insn-row';
+                if (insn.is_branch || insn.is_call || insn.is_ret) {
+                    row.classList.add('disasm-insn-branch');
+                }
+                if (insn.is_call) {
+                    row.classList.add('disasm-insn-call');
+                }
+
+                const addrSpan = `<span class="disasm-addr">${insn.address_hex || '---'}</span>`;
+                const bytesSpan = `<span class="disasm-bytes">${(insn.bytes_hex || '').substring(0, 24)}</span>`;
+                const mnemonicSpan = `<span class="disasm-mnemonic">${escapeHtml(insn.mnemonic || '')}</span>`;
+                const operandSpan = `<span class="disasm-operand">${escapeHtml(insn.op_str || '')}</span>`;
+
+                let annotation = '';
+                if (insn.branch_type) {
+                    annotation = `<span class="disasm-annotation">${escapeHtml(insn.branch_type)}</span>`;
+                }
+
+                row.innerHTML = `${addrSpan}${bytesSpan}${mnemonicSpan}${operandSpan}${annotation}`;
+                listingContainer.appendChild(row);
+            }
+
+            if (instructions.length > MAX_RENDER_INSTRUCTIONS) {
+                const notice = document.createElement('div');
+                notice.className = 'disasm-truncated-notice';
+                notice.textContent = `Showing ${MAX_RENDER_INSTRUCTIONS} of ${instructions.length} instructions. Full data available via API.`;
+                listingContainer.appendChild(notice);
+            }
+        } else {
+            listingContainer.innerHTML = '<p class="disasm-no-data">No instructions decoded.</p>';
+        }
+    }
+
+    // Loop detection results
+    const loopsContainer = document.getElementById('disasm-loops-container');
+    const noLoopsNotice = document.getElementById('disasm-no-loops');
+    if (loopsContainer) {
+        // Collect all loops from all sections
+        const allLoops = [];
+        sectionNames.forEach(name => {
+            const sec = sections[name];
+            if (sec.loops && sec.loops.length > 0) {
+                sec.loops.forEach(loop => allLoops.push({ sectionName: name, ...loop }));
+            }
+        });
+
+        if (allLoops.length === 0) {
+            if (noLoopsNotice) noLoopsNotice.style.display = '';
+        } else {
+            if (noLoopsNotice) noLoopsNotice.style.display = 'none';
+            // Clear previous content except the no-loops notice
+            const existing = loopsContainer.querySelectorAll('.disasm-loop-card');
+            existing.forEach(el => el.remove());
+
+            allLoops.forEach((loop, idx) => {
+                const card = document.createElement('div');
+                card.className = 'disasm-loop-card';
+
+                const headerAddr = loop.loop_header_address != null ? `0x${loop.loop_header_address.toString(16).padStart(16, '0')}` : '---';
+                const latchAddr = loop.loop_latch_address != null ? `0x${loop.loop_latch_address.toString(16).padStart(16, '0')}` : '---';
+                const boundStr = loop.bound_type === 'constant'
+                    ? `Constant: ${loop.loop_bound_immediate}`
+                    : loop.bound_type === 'variable'
+                        ? `Variable: ${loop.loop_bound_register || 'N/A'}`
+                        : 'Unknown';
+                const anomalies = (loop.anomalies || []).join(', ') || 'None';
+
+                card.innerHTML = `
+                    <div class="disasm-loop-header">Loop #${idx + 1} <span class="disasm-loop-section">[${escapeHtml(loop.sectionName)}]</span></div>
+                    <div class="meta-grid">
+                        <div class="meta-item"><span class="meta-label">Header:</span><span class="meta-value font-mono cyan-text">${headerAddr}</span></div>
+                        <div class="meta-item"><span class="meta-label">Latch:</span><span class="meta-value font-mono">${latchAddr}</span></div>
+                        <div class="meta-item"><span class="meta-label">Branch:</span><span class="meta-value font-mono">${escapeHtml(loop.branch_mnemonic || '---')}</span></div>
+                        <div class="meta-item"><span class="meta-label">Type:</span><span class="meta-value">${escapeHtml(loop.branch_type || '---')}</span></div>
+                        <div class="meta-item"><span class="meta-label">Comparison:</span><span class="meta-value font-mono">${escapeHtml(loop.cmp_mnemonic || '---')} ${escapeHtml(loop.cmp_lhs || '')} ${loop.cmp_rhs ? ', ' + escapeHtml(loop.cmp_rhs) : ''}</span></div>
+                        <div class="meta-item"><span class="meta-label">Bound:</span><span class="meta-value">${boundStr}</span></div>
+                        <div class="meta-item"><span class="meta-label">Signed:</span><span class="meta-value">${loop.is_signed_comparison ? 'Yes' : 'No'}</span></div>
+                        <div class="meta-item"><span class="meta-label">Anomalies:</span><span class="meta-value ${anomalies !== 'None' ? 'warning-text' : ''}">${anomalies}</span></div>
+                    </div>
+                `;
+                loopsContainer.appendChild(card);
             });
         }
     }

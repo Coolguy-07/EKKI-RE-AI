@@ -503,6 +503,22 @@ def get_macho_metadata(
         raise _handle_workspace_exception(err) from err
 
 
+@app.get(
+    "/api/projects/{project_id}/files/{file_id}/disassembly",
+    status_code=status.HTTP_200_OK,
+    summary="Get Capstone disassembly artifact",
+    description="Retrieves structured disassembly payload stored under analysis/{file_id}/disassembly.json.",
+)
+def get_disassembly_metadata(
+    project_id: str = APIPath(..., description="Unique project identifier"),
+    file_id: str = APIPath(..., description="Immutable unique file identifier"),
+):
+    try:
+        return workspace_manager.get_file_disassembly_metadata(project_id=project_id, file_id=file_id)
+    except Exception as err:
+        raise _handle_workspace_exception(err) from err
+
+
 # Existing AI Chat Endpoints (Preserved with complete backward compatibility)
 @app.post(
     "/chat",

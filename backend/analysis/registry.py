@@ -80,12 +80,10 @@ class AnalysisPipeline:
         for engine in engines_to_run:
             try:
                 # Call can_handle() if the engine implements it; default is True.
-                detected_type = (
-                    metadata_dict
-                    .get("engine_metadata", {})
-                    .get("binary_intelligence", {})
-                    .get("detected_type", "")
-                )
+                # NOTE: BinaryIntelligenceEngine stores detected_type at the top level
+                # of metadata_dict (via BinaryMetadata.model_dump()), not nested under
+                # engine_metadata.binary_intelligence.
+                detected_type = metadata_dict.get("detected_type", "")
                 if hasattr(engine, "can_handle") and not engine.can_handle(
                     content=content,
                     detected_type=detected_type,

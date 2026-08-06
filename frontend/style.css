@@ -1603,3 +1603,136 @@ body {
     font-style: italic;
     padding: 0.5rem;
 }
+
+/* ===== Phase 2.5: Disassembly Tab Styles ===== */
+
+.disasm-listing-wrapper {
+    max-height: 500px;
+    overflow-y: auto;
+    background: var(--bg-obsidian);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 4px 0;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 0.72rem;
+    line-height: 1.5;
+}
+
+.disasm-insn-row {
+    display: flex;
+    gap: 8px;
+    padding: 1px 10px;
+    border-bottom: 1px solid var(--border-subtle);
+    transition: background 0.1s ease;
+}
+
+.disasm-insn-row:hover {
+    background: rgba(0, 242, 254, 0.04);
+}
+
+.disasm-insn-branch {
+    background: rgba(168, 85, 247, 0.05);
+}
+
+.disasm-insn-branch:hover {
+    background: rgba(168, 85, 247, 0.1);
+}
+
+.disasm-insn-call {
+    background: rgba(59, 130, 246, 0.06);
+}
+
+.disasm-insn-call:hover {
+    background: rgba(59, 130, 246, 0.12);
+}
+
+.disasm-addr {
+    color: var(--text-cyan);
+    min-width: 160px;
+    flex-shrink: 0;
+    user-select: all;
+}
+
+.disasm-bytes {
+    color: var(--text-muted);
+    min-width: 110px;
+    flex-shrink: 0;
+    letter-spacing: 0.5px;
+}
+
+.disasm-mnemonic {
+    color: #a78bfa;
+    min-width: 70px;
+    flex-shrink: 0;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.disasm-operand {
+    color: var(--text-primary);
+    flex: 1;
+    min-width: 0;
+    word-break: break-all;
+}
+
+.disasm-annotation {
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    font-style: italic;
+    flex-shrink: 0;
+    margin-left: auto;
+    padding-left: 12px;
+}
+
+.disasm-truncated-notice {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    padding: 8px;
+    border-top: 1px solid var(--border-color);
+    font-style: italic;
+}
+
+.disasm-no-data {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-style: italic;
+    padding: 0.75rem;
+    text-align: center;
+}
+
+.disasm-section-label {
+    color: var(--text-muted);
+    font-weight: 400;
+    font-size: 0.75rem;
+    margin-left: 6px;
+}
+
+.disasm-loop-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+}
+
+.disasm-loop-header {
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.disasm-loop-section {
+    color: var(--text-cyan);
+    font-weight: 400;
+    font-size: 0.72rem;
+    margin-left: 6px;
+}
+
+.warning-text {
+    color: #f59e0b;
+    font-weight: 600;
+}

@@ -28,7 +28,7 @@ from .disassembly_model import (
     LoopDetectionResult,
     SectionDisassembly,
 )
-from .models import CURRENT_SCHEMA_VERSION
+
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,6 @@ try:
         CS_MODE_MIPS32,
         CS_MODE_MIPS64,
         CS_MODE_THUMB,
-        CS_GRP_BRANCH_RELATIVE,
         CS_GRP_CALL,
         CS_GRP_INT,
         CS_GRP_IRET,
@@ -60,6 +59,13 @@ try:
         CS_GRP_PRIVILEGE,
         CS_GRP_RET,
     )
+    # CS_GRP_BRANCH_RELATIVE was introduced in Capstone 5.x.
+    # Provide a safe fallback for Capstone 4.x installations.
+    try:
+        from capstone import CS_GRP_BRANCH_RELATIVE  # noqa: F811
+    except ImportError:
+        CS_GRP_BRANCH_RELATIVE = None  # type: ignore[assignment]
+
     CAPSTONE_AVAILABLE = True
     CAPSTONE_VERSION = ".".join(str(v) for v in capstone.version_info())
 except ImportError:
@@ -383,7 +389,9 @@ class CapstoneDisassemblyEngine(BaseAnalysisEngine):
         groups = insn.groups if hasattr(insn, "groups") else []
 
         is_jump = CS_GRP_JUMP in groups
-        is_branch_rel = CS_GRP_BRANCH_RELATIVE in groups
+        is_branch_rel = (
+            CS_GRP_BRANCH_RELATIVE is not None and CS_GRP_BRANCH_RELATIVE in groups
+        )
         is_call = CS_GRP_CALL in groups
         is_ret = CS_GRP_RET in groups or CS_GRP_IRET in groups
         is_privileged = CS_GRP_PRIVILEGE in groups
@@ -439,9 +447,29 @@ class CapstoneDisassemblyEngine(BaseAnalysisEngine):
             pass
 
         # Detect memory operand from op_str heuristically.
+        # Bracket presence indicates a memory dereference.
+        # For x86: destination is the first operand, source is the second.
+        #   MOV [rbp-4], eax  → writes_memory  (bracket in first operand)
+        #   MOV eax, [rbp-4]  → reads_memory   (bracket in second operand)
+        #   ADD eax, [rbp-8]  → reads_memory
+        #   CMP eax, [rbp-4]  → reads_memory
+        #   PUSH rbp          → no bracket → no memory flag (stack ops handled by register tracking)
         op_str = insn.op_str
-        reads_memory = "[" in op_str and "mov" in insn.mnemonic.lower()
-        writes_memory = "[" in op_str and insn.mnemonic.lower() in ("mov", "push", "call", "str", "stm")
+        has_bracket = "[" in op_str
+        reads_memory = False
+        writes_memory = False
+        if has_bracket:
+            comma_pos = op_str.find(",")
+            bracket_pos = op_str.find("[")
+            if comma_pos == -1:
+                # Single-operand instruction with bracket (e.g., PUSH [rbp-4], JMP [rax])
+                reads_memory = True
+            elif bracket_pos < comma_pos:
+                # Bracket is in the destination (first) operand → memory write
+                writes_memory = True
+            else:
+                # Bracket is in the source (second) operand → memory read
+                reads_memory = True
         memory_operand: Optional[str] = None
         if "[" in op_str:
             start = op_str.index("[")
@@ -715,11 +743,13 @@ class CapstoneDisassemblyEngine(BaseAnalysisEngine):
             parsed = engine_meta.get(engine_key, {}).get("parsed_data", {})
             unified = parsed.get("unified_model")
             if unified and unified.get("architecture") and unified["architecture"] != "Unknown":
-                sections_raw = parsed.get("sections", [])
+                # PE and Mach-O store sections under "sections";
+                # ELF stores them under "section_headers".
+                sections_raw = parsed.get("sections") or parsed.get("section_headers") or []
                 # Convert list of section dicts to name-keyed dict.
                 sections_dict: Dict[str, Any] = {}
                 for sec in sections_raw:
-                    name = sec.get("section_name") or sec.get("name") or "unknown"
+                    name = sec.get("name") or sec.get("section_name") or "unknown"
                     sections_dict[name] = {
                         "virtual_address_raw": sec.get("address_raw", sec.get("virtual_address_raw", 0)),
                         "raw_offset": sec.get("raw_offset", sec.get("offset", 0)),

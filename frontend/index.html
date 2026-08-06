@@ -341,6 +341,7 @@
                     <button type="button" class="modal-tab-btn hidden" id="tab-btn-pe" data-tab="tab-pe">PE Information</button>
                     <button type="button" class="modal-tab-btn hidden" id="tab-btn-elf" data-tab="tab-elf">ELF Information</button>
                     <button type="button" class="modal-tab-btn hidden" id="tab-btn-macho" data-tab="tab-macho">Mach-O Information</button>
+                    <button type="button" class="modal-tab-btn hidden" id="tab-btn-disasm" data-tab="tab-disasm">Disassembly</button>
                 </div>
 
                 <!-- Tab 1: General Metadata -->
@@ -629,6 +630,98 @@
                         <h4 class="pe-block-title">Loaded Dynamic Libraries (LC_LOAD_DYLIB)</h4>
                         <div class="pe-imports-list" id="macho-libraries-list">
                             <!-- Dynamic Libraries List -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 5: Disassembly -->
+                <div class="modal-tab-pane hidden" id="tab-disasm">
+                    <div class="meta-grid">
+                        <div class="meta-item">
+                            <span class="meta-label">Architecture:</span>
+                            <span class="badge-tag cyan" id="disasm-val-arch">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Bitness:</span>
+                            <span class="meta-value" id="disasm-val-bitness">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Endianness:</span>
+                            <span class="meta-value" id="disasm-val-endian">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Entry Point:</span>
+                            <span class="meta-value font-mono cyan-text" id="disasm-val-entry">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Capstone Version:</span>
+                            <span class="meta-value" id="disasm-val-capstone-ver">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Execution Time:</span>
+                            <span class="meta-value" id="disasm-val-exec-time">---</span>
+                        </div>
+                    </div>
+
+                    <!-- Disassembly Statistics -->
+                    <div class="pe-section-block">
+                        <h4 class="pe-block-title">Disassembly Statistics</h4>
+                        <div class="meta-grid">
+                            <div class="meta-item">
+                                <span class="meta-label">Total Instructions:</span>
+                                <span class="meta-value font-mono" id="disasm-val-total-insn">0</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">Total Basic Blocks:</span>
+                                <span class="meta-value font-mono" id="disasm-val-total-blocks">0</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">Loops Detected:</span>
+                                <span class="meta-value font-mono" id="disasm-val-total-loops">0</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">Sections Disassembled:</span>
+                                <span class="meta-value font-mono" id="disasm-val-sections-count">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Disassembled Sections -->
+                    <div class="pe-section-block">
+                        <h4 class="pe-block-title">Disassembled Sections</h4>
+                        <div class="pe-table-wrapper">
+                            <table class="pe-section-table">
+                                <thead>
+                                    <tr>
+                                        <th>Section</th>
+                                        <th>Virtual Address</th>
+                                        <th>Size</th>
+                                        <th>Instructions</th>
+                                        <th>Blocks</th>
+                                        <th>Loops</th>
+                                        <th>Coverage</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="disasm-sections-tbody">
+                                    <!-- Dynamic Disassembly Section Rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Instruction Listing (first section, capped) -->
+                    <div class="pe-section-block">
+                        <h4 class="pe-block-title">Instruction Listing <span class="disasm-section-label" id="disasm-listing-section-name"></span></h4>
+                        <div class="disasm-listing-wrapper" id="disasm-listing-container">
+                            <!-- Dynamic Instruction Rows -->
+                        </div>
+                    </div>
+
+                    <!-- Loop Detection Results -->
+                    <div class="pe-section-block">
+                        <h4 class="pe-block-title">Loop Detection Results</h4>
+                        <div id="disasm-loops-container">
+                            <p class="disasm-no-data" id="disasm-no-loops">No loops detected.</p>
                         </div>
                     </div>
                 </div>

@@ -768,6 +768,39 @@ class WorkspaceManager:
 
             return {"schema_version": 1, "file_id": file_id, "is_macho": False, "errors": ["Mach-O metadata unavailable."]}
 
+    def get_file_disassembly_metadata(self, project_id: str, file_id: str) -> Dict[str, Any]:
+        """Retrieves structured disassembly payload from analysis/{file_id}/disassembly.json.
+
+        If missing, triggers analysis pipeline on demand.
+        """
+        with self._lock:
+            metadata = self._load_metadata_unlocked(project_id)
+            safe_file_id = self._sanitize_identifier(file_id)
+
+            if safe_file_id not in metadata.files:
+                raise FileNotFoundInWorkspaceError(f"File ID '{file_id}' not found in project '{project_id}'.")
+
+            project_dir = self._get_project_dir(project_id)
+            disasm_json_path = project_dir / "analysis" / safe_file_id / "disassembly.json"
+
+            if disasm_json_path.exists():
+                try:
+                    with open(disasm_json_path, "r", encoding="utf-8") as f:
+                        return json.load(f)
+                except Exception as err:
+                    logger.warning("Corrupted disassembly JSON for file_id='%s': %s. Re-analyzing...", file_id, err)
+
+            # Re-run analysis if missing or unreadable
+            self.analyze_file(project_id=project_id, file_id=file_id)
+            if disasm_json_path.exists():
+                try:
+                    with open(disasm_json_path, "r", encoding="utf-8") as f:
+                        return json.load(f)
+                except Exception:
+                    pass
+
+            return {"schema_version": 1, "file_id": file_id, "has_disassembly": False, "errors": ["Disassembly metadata unavailable."]}
+
 
 # Global singleton instance of WorkspaceManager
 workspace_manager = WorkspaceManager()
