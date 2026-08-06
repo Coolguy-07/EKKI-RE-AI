@@ -66,8 +66,28 @@ try:
     except ImportError:
         CS_GRP_BRANCH_RELATIVE = None  # type: ignore[assignment]
 
+    def _get_capstone_version() -> str:
+        """Safely detects Capstone library version across 4.x and 5.x releases."""
+        if hasattr(capstone, "__version__") and capstone.__version__:
+            return str(capstone.__version__)
+        if hasattr(capstone, "version_bind") and callable(capstone.version_bind):
+            try:
+                ver = capstone.version_bind()
+                if isinstance(ver, (tuple, list)):
+                    return ".".join(str(x) for x in ver)
+            except Exception:
+                pass
+        if hasattr(capstone, "cs_version") and callable(capstone.cs_version):
+            try:
+                ver = capstone.cs_version()
+                if isinstance(ver, (tuple, list)):
+                    return ".".join(str(x) for x in ver)
+            except Exception:
+                pass
+        return "unknown"
+
     CAPSTONE_AVAILABLE = True
-    CAPSTONE_VERSION = ".".join(str(v) for v in capstone.version_info())
+    CAPSTONE_VERSION = _get_capstone_version()
 except ImportError:
     CAPSTONE_AVAILABLE = False
     CAPSTONE_VERSION = "unavailable"
