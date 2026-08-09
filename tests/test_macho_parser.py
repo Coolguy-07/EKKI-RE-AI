@@ -103,9 +103,9 @@ def build_synthetic_macho(
         # Load Command 2: LC_LOAD_DYLIB
         cmd2_base = cmd_base + cmd1_size
         struct.pack_into("<I", buf, cmd2_base, 0xC)
-        struct.pack_into("<I", buf, cmd2_base + 4, 48)
+        struct.pack_into("<I", buf, cmd2_base + 4, 56)
         struct.pack_into("<I", buf, cmd2_base + 8, 24)
-        buf[cmd2_base + 24 : cmd2_base + 45] = b"/usr/lib/libSystem.B.dylib"
+        buf[cmd2_base + 24 : cmd2_base + 50] = b"/usr/lib/libSystem.B.dylib"
 
     return bytes(buf)
 

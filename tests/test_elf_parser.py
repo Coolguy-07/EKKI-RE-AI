@@ -117,29 +117,29 @@ def build_synthetic_elf(
     # Section 0: NULL
     # Section 1: .shstrtab
     s1_off = sh_base + shentsize
-    struct.pack_into(fmt_u32, s1_off, buf, 7)          # sh_name -> .shstrtab
-    struct.pack_into(fmt_u32, s1_off + 4, buf, 3)      # SHT_STRTAB
+    struct.pack_into(fmt_u32, buf, s1_off, 7)          # sh_name -> .shstrtab
+    struct.pack_into(fmt_u32, buf, s1_off + 4, 3)      # SHT_STRTAB
     if is_64bit:
-        struct.pack_into(fmt_u64, s1_off + 24, buf, 0x600) # sh_offset
-        struct.pack_into(fmt_u64, s1_off + 32, buf, 20)    # sh_size
+        struct.pack_into(fmt_u64, buf, s1_off + 24, 0x600) # sh_offset
+        struct.pack_into(fmt_u64, buf, s1_off + 32, 20)    # sh_size
     else:
-        struct.pack_into(fmt_u32, s1_off + 16, buf, 0x600)
-        struct.pack_into(fmt_u32, s1_off + 20, buf, 20)
+        struct.pack_into(fmt_u32, buf, s1_off + 16, 0x600)
+        struct.pack_into(fmt_u32, buf, s1_off + 20, 20)
 
     # Section 2: .text
     s2_off = sh_base + (shentsize * 2)
-    struct.pack_into(fmt_u32, s2_off, buf, 1)          # sh_name -> .text
-    struct.pack_into(fmt_u32, s2_off + 4, buf, 1)      # SHT_PROGBITS
+    struct.pack_into(fmt_u32, buf, s2_off, 1)          # sh_name -> .text
+    struct.pack_into(fmt_u32, buf, s2_off + 4, 1)      # SHT_PROGBITS
     if is_64bit:
-        struct.pack_into(fmt_u64, s2_off + 8, buf, 6)     # SHF_ALLOC | SHF_EXECINSTR
-        struct.pack_into(fmt_u64, s2_off + 16, buf, 0x00401000)
-        struct.pack_into(fmt_u64, s2_off + 24, buf, 0x200)
-        struct.pack_into(fmt_u64, s2_off + 32, buf, 0x400)
+        struct.pack_into(fmt_u64, buf, s2_off + 8, 6)     # SHF_ALLOC | SHF_EXECINSTR
+        struct.pack_into(fmt_u64, buf, s2_off + 16, 0x00401000)
+        struct.pack_into(fmt_u64, buf, s2_off + 24, 0x200)
+        struct.pack_into(fmt_u64, buf, s2_off + 32, 0x400)
     else:
-        struct.pack_into(fmt_u32, s2_off + 8, buf, 6)
-        struct.pack_into(fmt_u32, s2_off + 12, buf, 0x08048000)
-        struct.pack_into(fmt_u32, s2_off + 16, buf, 0x200)
-        struct.pack_into(fmt_u32, s2_off + 20, buf, 0x400)
+        struct.pack_into(fmt_u32, buf, s2_off + 8, 6)
+        struct.pack_into(fmt_u32, buf, s2_off + 12, 0x08048000)
+        struct.pack_into(fmt_u32, buf, s2_off + 16, 0x200)
+        struct.pack_into(fmt_u32, buf, s2_off + 20, 0x400)
 
     buf[0x200 : 0x200 + 0x400] = b"\x31\xc0\xbf\x01\x00\x00\x00\x0f\x05" * 100
 

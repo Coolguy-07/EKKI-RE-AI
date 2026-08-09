@@ -108,6 +108,32 @@ class TestMetadataLifecycle(unittest.TestCase):
         self.assertTrue(reloaded_proj.files[file_meta.file_id].metadata)
         self.assertEqual(reloaded_proj.files[file_meta.file_id].metadata["detected_type"], "Markdown Document")
 
+    def test_pipeline_execution_for_pe_binary(self) -> None:
+        """Verify pipeline execution with PE binary persists metadata.json and pe.json artifacts."""
+        from tests.test_pe_parser import build_synthetic_pe
+        pe_bytes = build_synthetic_pe(is_64bit=True, is_dll=False)
+
+        file_meta = self.manager.add_file(
+            project_id=self.project.project_id,
+            filename="sample.exe",
+            content=pe_bytes,
+        )
+
+        proj_dir = Path(self.temp_dir) / self.project.project_id
+        meta_path = proj_dir / "analysis" / file_meta.file_id / "metadata.json"
+        pe_path = proj_dir / "analysis" / file_meta.file_id / "pe.json"
+
+        self.assertTrue(meta_path.exists(), "metadata.json must exist on PE upload")
+        self.assertTrue(pe_path.exists(), "pe.json must exist on PE upload")
+
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta_data = json.load(f)
+
+        self.assertEqual(meta_data["filename"], "sample.exe")
+        self.assertIn("PE (Windows Executable)", meta_data["detected_type"])
+        self.assertIn("pe_parser", meta_data["engine_metadata"])
+        self.assertIn("binary_intelligence", meta_data["engine_metadata"])
+
 
 if __name__ == "__main__":
     unittest.main()

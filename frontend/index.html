@@ -342,6 +342,7 @@
                     <button type="button" class="modal-tab-btn hidden" id="tab-btn-elf" data-tab="tab-elf">ELF Information</button>
                     <button type="button" class="modal-tab-btn hidden" id="tab-btn-macho" data-tab="tab-macho">Mach-O Information</button>
                     <button type="button" class="modal-tab-btn hidden" id="tab-btn-disasm" data-tab="tab-disasm">Disassembly</button>
+                    <button type="button" class="modal-tab-btn hidden" id="tab-btn-ghidra" data-tab="tab-ghidra">Ghidra</button>
                 </div>
 
                 <!-- Tab 1: General Metadata -->
@@ -722,6 +723,88 @@
                         <h4 class="pe-block-title">Loop Detection Results</h4>
                         <div id="disasm-loops-container">
                             <p class="disasm-no-data" id="disasm-no-loops">No loops detected.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 6: Ghidra Decompiler & Deep Program Analysis -->
+                <div class="modal-tab-pane hidden" id="tab-ghidra">
+                    <!-- Ghidra Summary Grid -->
+                    <div class="meta-grid">
+                        <div class="meta-item">
+                            <span class="meta-label">Processor / Arch:</span>
+                            <span class="meta-value font-mono cyan-text" id="ghidra-val-processor">N/A</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Language ID:</span>
+                            <span class="meta-value font-mono" id="ghidra-val-language">N/A</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Compiler Spec:</span>
+                            <span class="meta-value" id="ghidra-val-compiler">N/A</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Base Address:</span>
+                            <span class="meta-value font-mono" id="ghidra-val-base">0x00000000</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Entry Point:</span>
+                            <span class="meta-value font-mono cyan-text" id="ghidra-val-entry">0x00000000</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Analysis Status:</span>
+                            <span class="badge-tag green" id="ghidra-val-status">analyzed</span>
+                        </div>
+                    </div>
+
+                    <!-- Statistics Summary Bar -->
+                    <div class="pe-summary-bar">
+                        <div class="pe-stat-card">
+                            <span class="pe-stat-num cyan-text" id="ghidra-val-func-count">0</span>
+                            <span class="pe-stat-label">Functions</span>
+                        </div>
+                        <div class="pe-stat-card">
+                            <span class="pe-stat-num" id="ghidra-val-sym-count">0</span>
+                            <span class="pe-stat-label">Symbols</span>
+                        </div>
+                        <div class="pe-stat-card">
+                            <span class="pe-stat-num" id="ghidra-val-exec-time">0ms</span>
+                            <span class="pe-stat-label">Exec Time</span>
+                        </div>
+                    </div>
+
+                    <!-- Function List & Decompiler View Split -->
+                    <div class="pe-section-block">
+                        <h4 class="pe-block-title">Recovered Functions & Decompiled C Pseudocode</h4>
+                        <div class="ghidra-split-wrapper">
+                            <div class="ghidra-func-list" id="ghidra-func-list-container">
+                                <!-- Dynamic Function Items -->
+                            </div>
+                            <div class="ghidra-decomp-view">
+                                <div class="ghidra-decomp-header">
+                                    <span id="ghidra-selected-func-name">Select a function to view decompiled C code</span>
+                                </div>
+                                <pre class="ghidra-code-block" id="ghidra-decompiled-code">// Decompiled C pseudocode will appear here...</pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recovered Symbols Table -->
+                    <div class="pe-section-block">
+                        <h4 class="pe-block-title">Recovered Symbols</h4>
+                        <div class="pe-table-wrapper">
+                            <table class="pe-table">
+                                <thead>
+                                    <tr>
+                                        <th>Symbol Name</th>
+                                        <th>Address</th>
+                                        <th>Type</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ghidra-symbols-tbody">
+                                    <!-- Dynamic Symbol Rows -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>

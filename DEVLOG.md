@@ -4,6 +4,21 @@ This engineering diary records major architectural decisions, implementation cha
 
 ---
 
+## Log Entry 005 — Phase 2.6: Ghidra Headless Integration Engine Architecture
+**Date**: 2026-08-06  
+**Author**: Lead Principal Reverse Engineering Architect  
+
+### Architectural Context & Decision
+Phase 2.6 introduces deep program decompilation by integrating Ghidra Headless (`analyzeHeadless`) as a modular plugin (`GhidraAnalysisEngine`). Capstone and Ghidra operate as complementary analysis layers: Capstone provides instant instruction disassembly, while Ghidra extracts function boundaries, control flow graphs, symbol tables, and decompiled C pseudocode.
+
+### Key Implementation Details
+1. **Subprocess Safety**: Ghidra Headless is executed via `subprocess.run(cmd, shell=False, timeout=settings.GHIDRA_TIMEOUT_SECONDS)` to eliminate shell injection vectors.
+2. **Graceful Fallback**: If Ghidra is unconfigured or not installed locally, `ghidra_available` is set to `False` and a structured fallback artifact is returned without throwing exceptions or stopping the pipeline.
+3. **Persisted Artifact**: Extracted program metadata, function listing, and decompiled C functions are written atomically to `analysis/{file_id}/ghidra.json`.
+4. **Interactive Decompiler View**: Added side-by-side function listing and decompiled C pseudocode viewer to the frontend modal `Ghidra` tab.
+
+---
+
 ## Log Entry 001 — Phase 2.1: Project Workspace System Architecture
 **Date**: 2026-08-04  
 **Author**: Antigravity / EKKI Engineering Team  

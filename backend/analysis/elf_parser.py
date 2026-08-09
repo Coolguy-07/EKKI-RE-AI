@@ -8,6 +8,7 @@ Symbol Tables, Dynamic Symbol Tables, Dynamic Libraries (DT_NEEDED), and Interpr
 Constructs UnifiedExecutableModel and persists analysis/{file_id}/elf.json.
 """
 
+import json
 import logging
 import os
 import struct
@@ -33,6 +34,19 @@ class ELFParserEngine(BaseAnalysisEngine):
     @property
     def engine_version(self) -> str:
         return "1.0.0"
+
+    def can_handle(
+        self,
+        content: bytes,
+        detected_type: str = "",
+        existing_metadata: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Determines if engine should execute based on detected type or raw magic bytes."""
+        if "ELF" in detected_type:
+            return True
+        if content and len(content) >= 4 and content.startswith(b"\x7fELF"):
+            return True
+        return False
 
     # --- ELF Mappings ---
     TYPE_MAP = {
@@ -138,13 +152,13 @@ class ELFParserEngine(BaseAnalysisEngine):
         if reader.size < 52:
             errors.append("File size smaller than minimum ELF header (52 bytes).")
             elf_data["errors"] = errors
-            return self._build_engine_result(elf_data, start_time)
+            return self._build_engine_result(elf_data, start_time, existing_metadata=existing_metadata)
 
         magic = reader.read_bytes(0, 4)
         if magic != b"\x7fELF":
             errors.append("File magic signature does not match ELF format ('\\x7fELF').")
             elf_data["errors"] = errors
-            return self._build_engine_result(elf_data, start_time)
+            return self._build_engine_result(elf_data, start_time, existing_metadata=existing_metadata)
 
         elf_data["is_elf"] = True
         elf_data["summary"]["is_elf"] = True
@@ -177,7 +191,7 @@ class ELFParserEngine(BaseAnalysisEngine):
             if reader.size < 64:
                 errors.append("File truncated before 64-bit ELF header complete.")
                 elf_data["errors"] = errors
-                return self._build_engine_result(elf_data, start_time)
+                return self._build_engine_result(elf_data, start_time, existing_metadata=existing_metadata)
             e_entry = read_u64(24) or 0
             e_phoff = read_u64(32) or 0
             e_shoff = read_u64(40) or 0
@@ -496,10 +510,15 @@ class ELFParserEngine(BaseAnalysisEngine):
         if reader.errors:
             errors.extend(reader.errors)
 
-        return self._build_engine_result(elf_data, start_time)
+        return self._build_engine_result(elf_data, start_time, existing_metadata)
 
-    def _build_engine_result(self, elf_data: Dict[str, Any], start_time: float) -> Dict[str, Any]:
-        """Formats output dict and saves artifact analysis/{file_id}/elf.json."""
+    def _build_engine_result(
+        self,
+        elf_data: Dict[str, Any],
+        start_time: float,
+        existing_metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Formats output dict and merges into existing_metadata."""
         exec_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
         logger.info(
             "ELFParserEngine completed for file_id='%s': is_elf=%s sections=%d in %.2fms",
@@ -509,14 +528,12 @@ class ELFParserEngine(BaseAnalysisEngine):
             exec_time_ms,
         )
 
-        return {
-            self.engine_name: {
-                "engine_version": self.engine_version,
-                "execution_time_ms": exec_time_ms,
-                "is_elf": elf_data["is_elf"],
-                "parsed_data": elf_data,
-            }
-        }
+        return self._inject_engine_result(
+            existing_metadata=existing_metadata,
+            parsed_data=elf_data,
+            exec_time_ms=exec_time_ms,
+            extra_fields={"is_elf": elf_data["is_elf"]},
+        )
 
     def save_elf_artifact(self, project_dir: Path, file_id: str, elf_data: Dict[str, Any]) -> Path:
         """Saves parsed ELF payload to projects/{project_id}/analysis/{file_id}/elf.json."""

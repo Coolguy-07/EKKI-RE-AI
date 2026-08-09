@@ -19,6 +19,7 @@ from .disassembly_model import (
 )
 from .elf_parser import ELFParserEngine
 from .executable_model import CURRENT_SHARED_MODEL_VERSION, UnifiedExecutableModel, UnifiedSection
+from .ghidra_engine import GhidraAnalysisEngine
 from .macho_parser import MachOParserEngine
 from .models import BinaryMetadata, SchemaVersion
 from .pe_parser import PEParserEngine
@@ -35,6 +36,7 @@ __all__ = [
     "LoopDetectionResult",
     "SectionDisassembly",
     "CURRENT_DISASSEMBLY_SCHEMA_VERSION",
+    "GhidraAnalysisEngine",
     "PEParserEngine",
     "ELFParserEngine",
     "MachOParserEngine",

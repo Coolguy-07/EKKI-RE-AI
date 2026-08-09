@@ -1,3 +1,13 @@
+Day 6 (2026-08-06)
+
+Completed Phase 2.6: Ghidra Headless Integration Engine
+- Created GhidraAnalysisEngine in backend/analysis/ghidra_engine.py
+- Added analyzeHeadless subprocess execution launcher with timeout guards
+- Persisted analysis/{file_id}/ghidra.json artifact
+- Added REST endpoint GET /api/projects/{project_id}/files/{file_id}/ghidra
+- Added Ghidra tab to frontend modal with function listing and decompiled C viewer
+- Created test suite tests/test_ghidra_engine.py
+
 Day 1 (2026-08-01)
 
 Completed:

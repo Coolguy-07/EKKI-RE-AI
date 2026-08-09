@@ -295,65 +295,76 @@ class FileDetector:
         stripped = text_sample.strip()
         ext = os.path.splitext(filename)[1].lower()
 
-        # 1. JSON Detection
+        # 1. Definitive File Extensions (Prioritized to prevent heuristic misclassification)
+        ext_map = {
+            ".json": ("JSON Document", "N/A", None),
+            ".xml": ("XML Document", "N/A", None),
+            ".md": ("Markdown Document", "N/A", None),
+            ".markdown": ("Markdown Document", "N/A", None),
+            ".asm": ("Assembly Source Code", "N/A", None),
+            ".s": ("Assembly Source Code", "N/A", None),
+            ".S": ("Assembly Source Code", "N/A", None),
+            ".rs": ("Rust Source Code", "N/A", None),
+            ".go": ("Go Source Code", "N/A", None),
+            ".cpp": ("C++ Source Code", "N/A", None),
+            ".hpp": ("C++ Source Code", "N/A", None),
+            ".cc": ("C++ Source Code", "N/A", None),
+            ".cxx": ("C++ Source Code", "N/A", None),
+            ".c": ("C Source Code", "N/A", None),
+            ".h": ("C Source Code", "N/A", None),
+            ".py": ("Python Source Code", "N/A", None),
+            ".java": ("Java Source Code", "N/A", None),
+        }
+        if ext in ext_map:
+            return ext_map[ext]
+
+        # 2. Structural Content & Documentation Syntax (JSON, XML, Markdown)
         if (stripped.startswith("{") and stripped.endswith("}")) or (stripped.startswith("[") and stripped.endswith("]")):
             try:
                 json.loads(text_sample)
                 return ("JSON Document", "N/A", None)
             except Exception:
                 pass
-        if ext == ".json":
-            return ("JSON Document", "N/A", None)
 
-        # 2. XML Detection
         if stripped.startswith("<?xml") or (stripped.startswith("<") and stripped.endswith(">")):
             try:
                 ET.fromstring(text_sample[:4096])
                 return ("XML Document", "N/A", None)
             except Exception:
                 pass
-        if ext == ".xml":
-            return ("XML Document", "N/A", None)
 
-        # 3. Assembly Source
+        if stripped.startswith(("# ", "## ", "### ", "#### ")) or "```" in stripped:
+            return ("Markdown Document", "N/A", None)
+
+        # 3. Programming Language Heuristic Fallback
         asm_keywords = [
             r"\.section", r"\.global", r"\.globl", r"\.text", r"\.data", r"\.code",
             r"section\s+\.text", r"global\s+_main", r"mov\s+[a-z]+,", r"push\s+[a-z]+",
             r"pop\s+[a-z]+", r"ret\b", r"call\s+[a-zA-Z_]"
         ]
-        if any(re.search(pat, text_sample, re.IGNORECASE) for pat in asm_keywords) or ext in (".asm", ".s", ".S"):
+        if any(re.search(pat, text_sample, re.IGNORECASE) for pat in asm_keywords):
             return ("Assembly Source Code", "N/A", None)
 
-        # 4. Rust Source
-        if any(k in text_sample for k in ["fn main()", "use std::", "pub fn ", "let mut ", "impl "]) or ext == ".rs":
+        if any(k in text_sample for k in ["fn main()", "use std::", "pub fn ", "let mut ", "impl "]):
             return ("Rust Source Code", "N/A", None)
 
-        # 5. Go Source
-        if (re.search(r"\bpackage\s+\w+", text_sample) and "import " in text_sample) or ext == ".go":
+        if re.search(r"\bpackage\s+\w+", text_sample) and "import " in text_sample:
             return ("Go Source Code", "N/A", None)
 
-        # 6. C++ Source
         cpp_patterns = ["#include <iostream>", "using namespace std;", "std::cout", "template<", "class "]
-        if any(pat in text_sample for pat in cpp_patterns) or ext in (".cpp", ".hpp", ".cc", ".cxx"):
+        if any(pat in text_sample for pat in cpp_patterns):
             return ("C++ Source Code", "N/A", None)
 
-        # 7. C Source
         c_patterns = ["#include <stdio.h>", "#include <stdlib.h>", "int main(", "void main(", "struct "]
-        if any(pat in text_sample for pat in c_patterns) or ext in (".c", ".h"):
+        if any(pat in text_sample for pat in c_patterns):
             return ("C Source Code", "N/A", None)
 
-        # 8. Python Source
         py_patterns = ["def ", "import os", "import sys", "if __name__ == '__main__':", "class "]
-        if (any(pat in text_sample for pat in py_patterns) and ("\n" in text_sample)) or ext == ".py":
+        if any(pat in text_sample for pat in py_patterns) and ("\n" in text_sample):
             return ("Python Source Code", "N/A", None)
 
-        # 9. Java Source
-        if any(pat in text_sample for pat in ["public class ", "import java.", "package "]) or ext == ".java":
+        if any(pat in text_sample for pat in ["public class ", "import java.", "package "]):
             return ("Java Source Code", "N/A", None)
 
-        # 10. Markdown Document Detection
-        if ext in (".md", ".markdown") or stripped.startswith(("# ", "## ", "### ", "#### ")) or "```" in stripped:
-            return ("Markdown Document", "N/A", None)
-
-        # 11. Default Text
+        # 4. Default Text
         return ("Text Document", "N/A", None)

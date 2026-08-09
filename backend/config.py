@@ -86,6 +86,16 @@ class Settings(BaseSettings):
         description="SQLAlchemy connection URI for persistent storage.",
     )
 
+    # --- Ghidra Headless Settings ---
+    GHIDRA_PATH: str = Field(
+        default="",
+        description="Path to Ghidra installation directory or analyzeHeadless executable.",
+    )
+    GHIDRA_TIMEOUT_SECONDS: int = Field(
+        default=120,
+        description="Maximum execution timeout in seconds for Ghidra headless analysis.",
+    )
+
     # Pydantic Settings Configuration
     model_config = SettingsConfigDict(
         env_file=".env",

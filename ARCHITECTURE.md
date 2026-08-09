@@ -56,7 +56,9 @@ When a user uploads a binary file to EKKI-RE-AI, the binary flows through a deco
                          │ ├─ metadata.json          │
                          │ ├─ pe.json                │
                          │ ├─ elf.json               │
-                         │ └─ macho.json             │
+                         │ ├─ macho.json             │
+                         │ ├─ disassembly.json       │
+                         │ └─ ghidra.json            │
                          └───────────────────────────┘
 ```
 
@@ -71,6 +73,8 @@ When a user uploads a binary file to EKKI-RE-AI, the binary flows through a deco
   - `PE Information`: DOS header, COFF header, Optional header, PE section table with per-section entropy bars, imported DLLs & function chips.
   - `ELF Information`: ELF header (32/64-bit, Little/Big endian), Program headers, Section headers with per-section entropy bars, `PT_INTERP` interpreter path, `DT_NEEDED` dynamic libraries.
   - `Mach-O Information`: Mach header (32/64-bit, Universal Fat binary slices), Load commands, Segments & Sections with per-section entropy bars, `LC_LOAD_DYLIB` dynamic libraries, `LC_UUID`, Code Signature.
+  - `Disassembly`: Monospace assembly instruction viewer, branch/call color highlights, basic block statistics, and loop detection results.
+  - `Ghidra`: Function listing, recovered symbols table, processor/language summary, and side-by-side decompiled C pseudocode viewer.
 
 ### 2.2 FastAPI Backend (`backend/app.py`)
 - **API Engine**: FastAPI app with CORS middleware, asynchronous request handling, and exception mapping.
@@ -82,6 +86,8 @@ When a user uploads a binary file to EKKI-RE-AI, the binary flows through a deco
   - `GET /api/projects/{id}/files/{id}/pe`: Fetch `pe.json`.
   - `GET /api/projects/{id}/files/{id}/elf`: Fetch `elf.json`.
   - `GET /api/projects/{id}/files/{id}/macho`: Fetch `macho.json`.
+  - `GET /api/projects/{id}/files/{id}/disassembly`: Fetch `disassembly.json`.
+  - `GET /api/projects/{id}/files/{id}/ghidra`: Fetch `ghidra.json`.
   - `POST /chat`, `POST /chat/stream`, `POST /chat/orchestrate`: Multi-agent chat interfaces.
 
 ### 2.3 Workspace Manager (`backend/workspace.py`)
@@ -100,7 +106,9 @@ When a user uploads a binary file to EKKI-RE-AI, the binary flows through a deco
               ├── metadata.json
               ├── pe.json
               ├── elf.json
-              └── macho.json
+              ├── macho.json
+              ├── disassembly.json
+              └── ghidra.json
   ```
 
 ### 2.4 Reusable Binary Reader (`backend/analysis/binary_reader.py`)

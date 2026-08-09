@@ -8,6 +8,7 @@ Symbols, Dynamic Libraries (LC_LOAD_DYLIB), UUID (LC_UUID), Entry Point (LC_MAIN
 Constructs UnifiedExecutableModel and persists analysis/{file_id}/macho.json.
 """
 
+import json
 import logging
 import os
 import struct
@@ -34,6 +35,23 @@ class MachOParserEngine(BaseAnalysisEngine):
     @property
     def engine_version(self) -> str:
         return "1.0.0"
+
+    def can_handle(
+        self,
+        content: bytes,
+        detected_type: str = "",
+        existing_metadata: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Determines if engine should execute based on detected type or raw magic bytes."""
+        if "Mach-O" in detected_type:
+            return True
+        if content and len(content) >= 4 and content[:4] in (
+            b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe",
+            b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe",
+            b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca",
+        ):
+            return True
+        return False
 
     # --- Mach-O Mappings ---
     CPU_TYPE_MAP = {
@@ -121,7 +139,7 @@ class MachOParserEngine(BaseAnalysisEngine):
         if reader.size < 28:
             errors.append("File size smaller than Mach-O header (28 bytes).")
             macho_data["errors"] = errors
-            return self._build_engine_result(macho_data, start_time)
+            return self._build_engine_result(macho_data, start_time, existing_metadata=existing_metadata)
 
         magic_raw = reader.read_bytes(0, 4) or b""
 
@@ -134,7 +152,7 @@ class MachOParserEngine(BaseAnalysisEngine):
             if 45 <= major_ver <= 70:
                 # It's a Java Class File, not Mach-O
                 macho_data["errors"] = errors
-                return self._build_engine_result(macho_data, start_time)
+                return self._build_engine_result(macho_data, start_time, existing_metadata=existing_metadata)
 
         is_macho_magic = magic_raw in (
             b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe",
@@ -144,7 +162,7 @@ class MachOParserEngine(BaseAnalysisEngine):
         if not is_fat and not is_macho_magic:
             errors.append("File magic signature does not match Mach-O format.")
             macho_data["errors"] = errors
-            return self._build_engine_result(macho_data, start_time)
+            return self._build_engine_result(macho_data, start_time, existing_metadata=existing_metadata)
 
         macho_data["is_macho"] = True
         macho_data["summary"]["is_macho"] = True
@@ -232,10 +250,12 @@ class MachOParserEngine(BaseAnalysisEngine):
                 errors.append(f"Load command bounds violation at index {c_idx}.")
                 break
 
-            cmd_type = read_u32(cmd_offset) or 0
-            cmd_size = read_u32(cmd_offset + 4) or 8
+            cmd_type = read_u32(cmd_offset)
+            if cmd_type is None:
+                break
+            cmd_size = read_u32(cmd_offset + 4)
 
-            if cmd_size < 8 or not reader.is_valid_offset(cmd_offset, cmd_size):
+            if cmd_size is None or cmd_size < 8 or not reader.is_valid_offset(cmd_offset, cmd_size):
                 errors.append(f"Invalid cmdsize {cmd_size} at index {c_idx}.")
                 break
 
@@ -435,10 +455,15 @@ class MachOParserEngine(BaseAnalysisEngine):
         if reader.errors:
             errors.extend(reader.errors)
 
-        return self._build_engine_result(macho_data, start_time)
+        return self._build_engine_result(macho_data, start_time, existing_metadata)
 
-    def _build_engine_result(self, macho_data: Dict[str, Any], start_time: float) -> Dict[str, Any]:
-        """Formats output dict and saves artifact analysis/{file_id}/macho.json."""
+    def _build_engine_result(
+        self,
+        macho_data: Dict[str, Any],
+        start_time: float,
+        existing_metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Formats output dict and merges into existing_metadata."""
         exec_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
         logger.info(
             "MachOParserEngine completed for file_id='%s': is_macho=%s sections=%d in %.2fms",
@@ -448,14 +473,12 @@ class MachOParserEngine(BaseAnalysisEngine):
             exec_time_ms,
         )
 
-        return {
-            self.engine_name: {
-                "engine_version": self.engine_version,
-                "execution_time_ms": exec_time_ms,
-                "is_macho": macho_data["is_macho"],
-                "parsed_data": macho_data,
-            }
-        }
+        return self._inject_engine_result(
+            existing_metadata=existing_metadata,
+            parsed_data=macho_data,
+            exec_time_ms=exec_time_ms,
+            extra_fields={"is_macho": macho_data["is_macho"]},
+        )
 
     def save_macho_artifact(self, project_dir: Path, file_id: str, macho_data: Dict[str, Any]) -> Path:
         """Saves parsed Mach-O payload to projects/{project_id}/analysis/{file_id}/macho.json."""

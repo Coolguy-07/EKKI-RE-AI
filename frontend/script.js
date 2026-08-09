@@ -805,6 +805,7 @@ async function openFileDetailsModal(projectId, fileMeta) {
     }
 
     fileDetailsModal.classList.remove('hidden');
+    switchFileModalTab('tab-general');
 
     // 2. Fetch full versioned metadata from REST API endpoint
     try {
@@ -819,71 +820,61 @@ async function openFileDetailsModal(projectId, fileMeta) {
         console.error('Failed to fetch file analysis metadata:', err);
     }
 
-    // 2. Fetch PE, ELF, and Mach-O payload endpoints
+    // 3. Fetch PE, ELF, Mach-O, Disassembly, and Ghidra payload endpoints in parallel
     const peTabBtn = document.getElementById('tab-btn-pe');
     const elfTabBtn = document.getElementById('tab-btn-elf');
     const machoTabBtn = document.getElementById('tab-btn-macho');
-
-    try {
-        const peRes = await fetch(`${CONFIG.PROJECTS_API_URL}/${projectId}/files/${fileMeta.file_id}/pe`);
-        if (peRes.ok) {
-            const pePayload = await peRes.json();
-            if (pePayload && pePayload.is_pe) {
-                if (peTabBtn) peTabBtn.classList.remove('hidden');
-                renderPeInformationUI(pePayload);
-            } else if (peTabBtn) {
-                peTabBtn.classList.add('hidden');
-            }
-        }
-    } catch (err) {
-        if (peTabBtn) peTabBtn.classList.add('hidden');
-    }
-
-    try {
-        const elfRes = await fetch(`${CONFIG.PROJECTS_API_URL}/${projectId}/files/${fileMeta.file_id}/elf`);
-        if (elfRes.ok) {
-            const elfPayload = await elfRes.json();
-            if (elfPayload && elfPayload.is_elf) {
-                if (elfTabBtn) elfTabBtn.classList.remove('hidden');
-                renderElfInformationUI(elfPayload);
-            } else if (elfTabBtn) {
-                elfTabBtn.classList.add('hidden');
-            }
-        }
-    } catch (err) {
-        if (elfTabBtn) elfTabBtn.classList.add('hidden');
-    }
-
-    try {
-        const machoRes = await fetch(`${CONFIG.PROJECTS_API_URL}/${projectId}/files/${fileMeta.file_id}/macho`);
-        if (machoRes.ok) {
-            const machoPayload = await machoRes.json();
-            if (machoPayload && machoPayload.is_macho) {
-                if (machoTabBtn) machoTabBtn.classList.remove('hidden');
-                renderMachoInformationUI(machoPayload);
-            } else if (machoTabBtn) {
-                machoTabBtn.classList.add('hidden');
-            }
-        }
-    } catch (err) {
-        if (machoTabBtn) machoTabBtn.classList.add('hidden');
-    }
-
-    // 3. Fetch Disassembly payload
     const disasmTabBtn = document.getElementById('tab-btn-disasm');
-    try {
-        const disasmRes = await fetch(`${CONFIG.PROJECTS_API_URL}/${projectId}/files/${fileMeta.file_id}/disassembly`);
-        if (disasmRes.ok) {
-            const disasmPayload = await disasmRes.json();
-            if (disasmPayload && disasmPayload.has_disassembly !== false && disasmPayload.total_instructions > 0) {
-                if (disasmTabBtn) disasmTabBtn.classList.remove('hidden');
-                renderDisassemblyUI(disasmPayload);
-            } else if (disasmTabBtn) {
-                disasmTabBtn.classList.add('hidden');
-            }
-        }
-    } catch (err) {
-        if (disasmTabBtn) disasmTabBtn.classList.add('hidden');
+    const ghidraTabBtn = document.getElementById('tab-btn-ghidra');
+
+    const fileUrl = `${CONFIG.PROJECTS_API_URL}/${projectId}/files/${fileMeta.file_id}`;
+
+    const [peRes, elfRes, machoRes, disasmRes, ghidraRes] = await Promise.allSettled([
+        fetch(`${fileUrl}/pe`).then(r => r.ok ? r.json() : null),
+        fetch(`${fileUrl}/elf`).then(r => r.ok ? r.json() : null),
+        fetch(`${fileUrl}/macho`).then(r => r.ok ? r.json() : null),
+        fetch(`${fileUrl}/disassembly`).then(r => r.ok ? r.json() : null),
+        fetch(`${fileUrl}/ghidra`).then(r => r.ok ? r.json() : null),
+    ]);
+
+    // Handle PE payload
+    if (peRes.status === 'fulfilled' && peRes.value && peRes.value.is_pe) {
+        if (peTabBtn) peTabBtn.classList.remove('hidden');
+        renderPeInformationUI(peRes.value);
+    } else if (peTabBtn) {
+        peTabBtn.classList.add('hidden');
+    }
+
+    // Handle ELF payload
+    if (elfRes.status === 'fulfilled' && elfRes.value && elfRes.value.is_elf) {
+        if (elfTabBtn) elfTabBtn.classList.remove('hidden');
+        renderElfInformationUI(elfRes.value);
+    } else if (elfTabBtn) {
+        elfTabBtn.classList.add('hidden');
+    }
+
+    // Handle Mach-O payload
+    if (machoRes.status === 'fulfilled' && machoRes.value && machoRes.value.is_macho) {
+        if (machoTabBtn) machoTabBtn.classList.remove('hidden');
+        renderMachoInformationUI(machoRes.value);
+    } else if (machoTabBtn) {
+        machoTabBtn.classList.add('hidden');
+    }
+
+    // Handle Disassembly payload
+    if (disasmRes.status === 'fulfilled' && disasmRes.value && disasmRes.value.has_disassembly !== false && disasmRes.value.total_instructions > 0) {
+        if (disasmTabBtn) disasmTabBtn.classList.remove('hidden');
+        renderDisassemblyUI(disasmRes.value);
+    } else if (disasmTabBtn) {
+        disasmTabBtn.classList.add('hidden');
+    }
+
+    // Handle Ghidra payload
+    if (ghidraRes.status === 'fulfilled' && ghidraRes.value && (ghidraRes.value.ghidra_available || ghidraRes.value.function_count > 0 || ghidraRes.value.status === 'analyzed')) {
+        if (ghidraTabBtn) ghidraTabBtn.classList.remove('hidden');
+        renderGhidraUI(ghidraRes.value);
+    } else if (ghidraTabBtn) {
+        ghidraTabBtn.classList.add('hidden');
     }
 }
 
@@ -1296,6 +1287,87 @@ function renderDisassemblyUI(data) {
                     </div>
                 `;
                 loopsContainer.appendChild(card);
+            });
+        }
+    }
+}
+
+/**
+ * Renders Ghidra Decompiler Tab UI elements (Phase 2.6).
+ */
+function renderGhidraUI(data) {
+    if (!data) return;
+
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    };
+
+    setVal('ghidra-val-processor', data.processor || 'N/A');
+    setVal('ghidra-val-language', data.language_id || 'N/A');
+    setVal('ghidra-val-compiler', data.compiler_spec || 'N/A');
+    setVal('ghidra-val-base', data.base_address || '0x00000000');
+    setVal('ghidra-val-entry', data.entry_point || '0x00000000');
+    setVal('ghidra-val-status', data.status || 'analyzed');
+    setVal('ghidra-val-func-count', data.function_count || (data.functions ? data.functions.length : 0));
+    setVal('ghidra-val-sym-count', data.symbol_count || (data.symbols ? data.symbols.length : 0));
+    setVal('ghidra-val-exec-time', data.execution_time_ms ? `${data.execution_time_ms}ms` : '0ms');
+
+    // Render Function List & Decompiler Viewer
+    const funcListContainer = document.getElementById('ghidra-func-list-container');
+    const decompCodeElement = document.getElementById('ghidra-decompiled-code');
+    const selectedFuncNameElement = document.getElementById('ghidra-selected-func-name');
+
+    if (funcListContainer) {
+        funcListContainer.innerHTML = '';
+        const functions = data.functions || [];
+
+        if (functions.length === 0) {
+            funcListContainer.innerHTML = `<div class="disasm-no-data">No functions recovered by Ghidra.</div>`;
+            if (decompCodeElement) decompCodeElement.textContent = '// No decompiled code available.';
+        } else {
+            functions.forEach((func, idx) => {
+                const item = document.createElement('div');
+                item.className = 'ghidra-func-item' + (idx === 0 ? ' active' : '');
+                item.innerHTML = `
+                    <span class="font-mono cyan-text">${escapeHtml(func.name)}</span>
+                    <span class="ghidra-func-addr font-mono">${escapeHtml(func.address)}</span>
+                `;
+
+                item.addEventListener('click', () => {
+                    document.querySelectorAll('.ghidra-func-item').forEach(el => el.classList.remove('active'));
+                    item.classList.add('active');
+                    if (selectedFuncNameElement) selectedFuncNameElement.textContent = `Function: ${func.name} (${func.address})`;
+                    if (decompCodeElement) decompCodeElement.textContent = func.decompiled_c_code || '// No decompiled pseudocode available for this function.';
+                });
+
+                funcListContainer.appendChild(item);
+            });
+
+            // Select first function by default
+            if (functions[0]) {
+                if (selectedFuncNameElement) selectedFuncNameElement.textContent = `Function: ${functions[0].name} (${functions[0].address})`;
+                if (decompCodeElement) decompCodeElement.textContent = functions[0].decompiled_c_code || '// No decompiled pseudocode available for this function.';
+            }
+        }
+    }
+
+    // Render Symbols Table
+    const symTbody = document.getElementById('ghidra-symbols-tbody');
+    if (symTbody) {
+        symTbody.innerHTML = '';
+        const symbols = data.symbols || [];
+        if (symbols.length === 0) {
+            symTbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color: var(--text-muted);">No symbols recovered</td></tr>`;
+        } else {
+            symbols.slice(0, 100).forEach(sym => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="font-mono cyan-text"><strong>${escapeHtml(sym.name)}</strong></td>
+                    <td class="font-mono">${escapeHtml(sym.address)}</td>
+                    <td class="font-mono">${escapeHtml(sym.type || 'DEFAULT')}</td>
+                `;
+                symTbody.appendChild(tr);
             });
         }
     }

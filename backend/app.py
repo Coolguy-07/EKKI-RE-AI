@@ -6,7 +6,7 @@ Includes Project Workspace REST APIs and session management.
 """
 
 import logging
-from typing import Annotated, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import (
     FastAPI,
@@ -457,6 +457,7 @@ def analyze_file(
 
 @app.get(
     "/api/projects/{project_id}/files/{file_id}/pe",
+    response_model=Dict[str, Any],
     status_code=status.HTTP_200_OK,
     summary="Get parsed PE Information artifact",
     description="Retrieves structured PE analysis payload stored under analysis/{file_id}/pe.json.",
@@ -464,7 +465,7 @@ def analyze_file(
 def get_pe_metadata(
     project_id: str = APIPath(..., description="Unique project identifier"),
     file_id: str = APIPath(..., description="Immutable unique file identifier"),
-):
+) -> Dict[str, Any]:
     try:
         return workspace_manager.get_file_pe_metadata(project_id=project_id, file_id=file_id)
     except Exception as err:
@@ -473,6 +474,7 @@ def get_pe_metadata(
 
 @app.get(
     "/api/projects/{project_id}/files/{file_id}/elf",
+    response_model=Dict[str, Any],
     status_code=status.HTTP_200_OK,
     summary="Get parsed ELF Information artifact",
     description="Retrieves structured ELF analysis payload stored under analysis/{file_id}/elf.json.",
@@ -480,7 +482,7 @@ def get_pe_metadata(
 def get_elf_metadata(
     project_id: str = APIPath(..., description="Unique project identifier"),
     file_id: str = APIPath(..., description="Immutable unique file identifier"),
-):
+) -> Dict[str, Any]:
     try:
         return workspace_manager.get_file_elf_metadata(project_id=project_id, file_id=file_id)
     except Exception as err:
@@ -489,6 +491,7 @@ def get_elf_metadata(
 
 @app.get(
     "/api/projects/{project_id}/files/{file_id}/macho",
+    response_model=Dict[str, Any],
     status_code=status.HTTP_200_OK,
     summary="Get parsed Mach-O Information artifact",
     description="Retrieves structured Mach-O analysis payload stored under analysis/{file_id}/macho.json.",
@@ -496,7 +499,7 @@ def get_elf_metadata(
 def get_macho_metadata(
     project_id: str = APIPath(..., description="Unique project identifier"),
     file_id: str = APIPath(..., description="Immutable unique file identifier"),
-):
+) -> Dict[str, Any]:
     try:
         return workspace_manager.get_file_macho_metadata(project_id=project_id, file_id=file_id)
     except Exception as err:
@@ -505,6 +508,7 @@ def get_macho_metadata(
 
 @app.get(
     "/api/projects/{project_id}/files/{file_id}/disassembly",
+    response_model=Dict[str, Any],
     status_code=status.HTTP_200_OK,
     summary="Get Capstone disassembly artifact",
     description="Retrieves structured disassembly payload stored under analysis/{file_id}/disassembly.json.",
@@ -512,9 +516,26 @@ def get_macho_metadata(
 def get_disassembly_metadata(
     project_id: str = APIPath(..., description="Unique project identifier"),
     file_id: str = APIPath(..., description="Immutable unique file identifier"),
-):
+) -> Dict[str, Any]:
     try:
         return workspace_manager.get_file_disassembly_metadata(project_id=project_id, file_id=file_id)
+    except Exception as err:
+        raise _handle_workspace_exception(err) from err
+
+
+@app.get(
+    "/api/projects/{project_id}/files/{file_id}/ghidra",
+    response_model=Dict[str, Any],
+    status_code=status.HTTP_200_OK,
+    summary="Get Ghidra Headless analysis artifact",
+    description="Retrieves structured Ghidra analysis payload stored under analysis/{file_id}/ghidra.json.",
+)
+def get_ghidra_metadata(
+    project_id: str = APIPath(..., description="Unique project identifier"),
+    file_id: str = APIPath(..., description="Immutable unique file identifier"),
+) -> Dict[str, Any]:
+    try:
+        return workspace_manager.get_file_ghidra_metadata(project_id=project_id, file_id=file_id)
     except Exception as err:
         raise _handle_workspace_exception(err) from err
 

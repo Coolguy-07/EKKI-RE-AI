@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .base import BaseAnalysisEngine
 from .binary_reader import BinaryReader
-from .executable_model import CURRENT_SHARED_MODEL_VERSION, UnifiedExecutableModel
+from .executable_model import CURRENT_SHARED_MODEL_VERSION, UnifiedExecutableModel, UnifiedSection
 from .models import CURRENT_SCHEMA_VERSION
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,19 @@ class PEParserEngine(BaseAnalysisEngine):
     @property
     def engine_version(self) -> str:
         return "1.0.0"
+
+    def can_handle(
+        self,
+        content: bytes,
+        detected_type: str = "",
+        existing_metadata: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Determines if engine should execute based on detected type or raw magic bytes."""
+        if "PE" in detected_type or "Windows Executable" in detected_type:
+            return True
+        if content and len(content) >= 2 and content.startswith(b"MZ"):
+            return True
+        return False
 
     # --- Constant Mappings ---
     MACHINE_MAP = {
@@ -171,19 +184,19 @@ class PEParserEngine(BaseAnalysisEngine):
         if reader.size < 64:
             errors.append("File size is smaller than DOS header (64 bytes).")
             pe_data["errors"] = errors
-            return self._build_engine_result(pe_data, start_time)
+            return self._build_engine_result(pe_data, start_time, existing_metadata=existing_metadata)
 
         e_magic = reader.read_bytes(0, 2)
         if e_magic != b"MZ":
             errors.append("File magic signature does not match PE format ('MZ').")
             pe_data["errors"] = errors
-            return self._build_engine_result(pe_data, start_time)
+            return self._build_engine_result(pe_data, start_time, existing_metadata=existing_metadata)
 
         e_lfanew = reader.read_u32_le(0x3C)
         if e_lfanew is None or e_lfanew < 0 or e_lfanew > reader.size - 24:
             errors.append(f"Invalid or out-of-bounds e_lfanew offset: {e_lfanew}")
             pe_data["errors"] = errors
-            return self._build_engine_result(pe_data, start_time)
+            return self._build_engine_result(pe_data, start_time, existing_metadata=existing_metadata)
 
         pe_data["dos_header"] = {
             "e_magic": "MZ",
@@ -195,7 +208,7 @@ class PEParserEngine(BaseAnalysisEngine):
         if pe_sig != b"PE\x00\x00":
             errors.append(f"Invalid PE NT header signature at offset {e_lfanew}: {pe_sig!r}")
             pe_data["errors"] = errors
-            return self._build_engine_result(pe_data, start_time)
+            return self._build_engine_result(pe_data, start_time, existing_metadata=existing_metadata)
 
         pe_data["is_pe"] = True
         pe_data["summary"]["is_pe"] = True
@@ -214,7 +227,7 @@ class PEParserEngine(BaseAnalysisEngine):
         if any(v is None for v in [machine_raw, num_sections, timestamp_raw, opt_hdr_size, char_raw]):
             errors.append("Truncated COFF file header.")
             pe_data["errors"] = errors
-            return self._build_engine_result(pe_data, start_time)
+            return self._build_engine_result(pe_data, start_time, existing_metadata=existing_metadata)
 
         # Parse timestamp ISO string safely
         timestamp_iso = None
@@ -584,10 +597,15 @@ class PEParserEngine(BaseAnalysisEngine):
         if reader.errors:
             errors.extend(reader.errors)
 
-        return self._build_engine_result(pe_data, start_time)
+        return self._build_engine_result(pe_data, start_time, existing_metadata)
 
-    def _build_engine_result(self, pe_data: Dict[str, Any], start_time: float) -> Dict[str, Any]:
-        """Formats output dict and saves artifact analysis/{file_id}/pe.json."""
+    def _build_engine_result(
+        self,
+        pe_data: Dict[str, Any],
+        start_time: float,
+        existing_metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Formats output dict and merges into existing_metadata."""
         exec_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
         logger.info(
             "PEParserEngine completed for file_id='%s': is_pe=%s sections=%d in %.2fms",
@@ -597,14 +615,12 @@ class PEParserEngine(BaseAnalysisEngine):
             exec_time_ms,
         )
 
-        return {
-            self.engine_name: {
-                "engine_version": self.engine_version,
-                "execution_time_ms": exec_time_ms,
-                "is_pe": pe_data["is_pe"],
-                "parsed_data": pe_data,
-            }
-        }
+        return self._inject_engine_result(
+            existing_metadata=existing_metadata,
+            parsed_data=pe_data,
+            exec_time_ms=exec_time_ms,
+            extra_fields={"is_pe": pe_data["is_pe"]},
+        )
 
     def save_pe_artifact(self, project_dir: Path, file_id: str, pe_data: Dict[str, Any]) -> Path:
         """Saves parsed PE payload to projects/{project_id}/analysis/{file_id}/pe.json."""

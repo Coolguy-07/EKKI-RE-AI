@@ -7,7 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [2.6.0] - 2026-08-06 - Phase 2.6: Ghidra Headless Integration Engine
+
+### Added
+- Created `GhidraAnalysisEngine` (`backend/analysis/ghidra_engine.py`) implementing `BaseAnalysisEngine` plugin interface.
+- Added headless execution launcher (`analyzeHeadless`) via `subprocess.run` (shell=False) with safe path validation and execution timeout bounds.
+- Extracted program metadata, function manager listing, symbol table, and decompiled C pseudocode.
+- Persisted `analysis/{file_id}/ghidra.json` (`schema_version: 1`).
+- Added REST API endpoint `GET /api/projects/{project_id}/files/{file_id}/ghidra`.
+- Added frontend File Details Modal tab `Ghidra` rendering function list, function search, symbols table, and side-by-side decompiled C code viewer.
+- Created `tests/test_ghidra_engine.py` test suite.
+
+## [2.5.0] - 2026-08-05 - Phase 2.5: Capstone Disassembly Engine
+
+### Added
+- Created `CapstoneDisassemblyEngine` (`backend/analysis/capstone_engine.py`) with linear sweep disassembly, memory heuristics, basic block recovery, and loop detection.
+- Persisted `analysis/{file_id}/disassembly.json`.
+- Added REST API endpoint `GET /api/projects/{project_id}/files/{file_id}/disassembly`.
+- Added frontend `Disassembly` tab with monospace instruction viewer.
+- Created `tests/test_capstone_engine.py` test suite.
 
 ---
 

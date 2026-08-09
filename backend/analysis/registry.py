@@ -16,6 +16,7 @@ from .base import BaseAnalysisEngine
 from .binary_intelligence import BinaryIntelligenceEngine
 from .capstone_engine import CapstoneDisassemblyEngine
 from .elf_parser import ELFParserEngine
+from .ghidra_engine import GhidraAnalysisEngine
 from .macho_parser import MachOParserEngine
 from .models import BinaryMetadata, CURRENT_SCHEMA_VERSION
 from .pe_parser import PEParserEngine
@@ -33,12 +34,14 @@ class AnalysisPipeline:
         # Register default core analysis engines in execution order.
         # BinaryIntelligenceEngine always runs first to populate detected_type.
         # Format parsers run next to populate UnifiedExecutableModel.
-        # CapstoneDisassemblyEngine runs last — requires UnifiedExecutableModel from prior engines.
+        # CapstoneDisassemblyEngine runs next for fast instruction-level disassembly.
+        # GhidraAnalysisEngine runs last for deep program analysis and decompilation.
         self.register_engine(BinaryIntelligenceEngine())
         self.register_engine(PEParserEngine())
         self.register_engine(ELFParserEngine())
         self.register_engine(MachOParserEngine())
         self.register_engine(CapstoneDisassemblyEngine())
+        self.register_engine(GhidraAnalysisEngine())
 
     def register_engine(self, engine: BaseAnalysisEngine) -> None:
         """Registers a new AnalysisEngine implementation thread-safely."""
@@ -154,6 +157,16 @@ class AnalysisPipeline:
                 )
             except Exception as err:
                 logger.error("Failed to persist disassembly.json artifact for file_id='%s': %s", file_id, err)
+
+        # Save artifact under analysis/{file_id}/ghidra.json if ghidra_analysis output is present
+        if "ghidra_analysis" in engine_meta and "parsed_data" in engine_meta["ghidra_analysis"]:
+            try:
+                ghidra_engine = GhidraAnalysisEngine()
+                ghidra_engine.save_ghidra_artifact(
+                    project_dir, file_id, engine_meta["ghidra_analysis"]["parsed_data"]
+                )
+            except Exception as err:
+                logger.error("Failed to persist ghidra.json artifact for file_id='%s': %s", file_id, err)
 
         return validated_metadata
 

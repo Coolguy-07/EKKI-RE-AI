@@ -146,5 +146,8 @@ class BinaryIntelligenceEngine(BaseAnalysisEngine):
             engine_metadata=merged_engine_meta,
         )
 
+        res_dict = metadata_obj.model_dump()
+        res_dict[self.engine_name] = engine_payload[self.engine_name]
+
         logger.info("Analysis completed: file_id='%s' status='%s' in %.2fms", file_id, status, exec_time_ms)
-        return metadata_obj.model_dump()
+        return res_dict

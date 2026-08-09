@@ -12,9 +12,9 @@ The project is developed incrementally. Each phase builds on the previous one, e
 
 # Current Status
 
-**Current Version:** 0.1
+**Current Version:** 0.2.6
 
-**Current Phase:** Phase 1 – Foundation
+**Current Phase:** Phase 2.6 – Ghidra Decompiler Integration Engine
 
 Status:
 
