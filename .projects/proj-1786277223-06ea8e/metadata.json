@@ -1,0 +1,12 @@
+{
+  "project_id": "proj-1786277223-06ea8e",
+  "name": "TEST",
+  "description": "",
+  "created_at": "2026-08-09T12:07:03.121009Z",
+  "updated_at": "2026-08-09T12:07:03.122168Z",
+  "status": "idle",
+  "model": "mannix-re:latest",
+  "tags": [],
+  "files": {},
+  "custom_metadata": {}
+}

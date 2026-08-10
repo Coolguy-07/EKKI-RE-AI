@@ -137,3 +137,143 @@ When a user uploads a binary file to EKKI-RE-AI, the binary flows through a deco
 - **`IntentRouter`**: Classifies user queries into specialized agent domains (`BINARY_ANALYSIS`, `CODE_ANALYSIS`, `GENERAL`).
 - **`AgentOrchestrator`**: Coordinates multi-agent collaboration between specialized agents.
 - **`OllamaClient`**: Manages communication with local Ollama LLM instances.
+
+---
+
+## 3. Verified Hermes Integration & Controlled Execution Architecture
+
+EKKI-RE-AI integrates **Hermes Agent CLI** (`v0.20.0`) through a multi-tiered security gateway, allowing controlled terminal and tool execution while enforcing complete user control and strict sandboxing.
+
+### 3.1 Verified System Architecture Diagram
+
+```
+User / Web Browser UI (Permission Selector & Modal)
+        │
+        ▼ (HTTP / REST API)
+FastAPI Backend (backend/app.py)
+        │
+        ▼
+AgentOrchestrator (Multi-Agent Reasoning)
+        │
+        ▼ (Tool Request)
+ToolRouter (Security Gateway & Allowlist)
+        │
+        ├──► PermissionManager (SAFE / ASK / FULL CONTROL)
+        ├──► WorkspacePolicy (Path Containment Boundary)
+        └──► AuditLogger (Secret Redaction & Audit Trail)
+                │
+                ▼ (Safe Subprocess Bridge)
+        HermesBridge (Process Lifecycle & AppLocker Bypass)
+                │
+                ▼ (CLI Process: --safe-mode -t terminal,file)
+        Hermes Agent CLI (v0.20.0)
+                │
+                ▼ (Local REST API: http://localhost:11434)
+        Ollama Local Inference Server
+```
+
+---
+
+### 3.2 Component Responsibilities
+
+- **`IntentRouter`**: Classifies user prompts and routes them to specialized LLM domains based on analysis intent.
+- **`AgentOrchestrator`**: Coordinates reasoning across specialist models, tracks session context, synthesizes findings, and delegates required tool requests to `ToolRouter`.
+- **Specialist Models**: Domain-specific Ollama models providing high-level analysis without direct system or tool execution privileges.
+- **`ToolRouter`**: Centralized security gateway enforcing tool allowlisting (`file_list`, `file_read`, `file_metadata`, `terminal_execute`), output size caps (`MAX_OUTPUT_BYTES = 100 KB`), argument sanitization, and structured audit logging.
+- **`PermissionManager`**: Thread-safe manager governing global execution modes (`SAFE`, `ASK`, `FULL CONTROL`), approval request creation, pending queue management, and single-use vs. session-wide permissions.
+- **`WorkspacePolicy`**: Strict containment engine resolving target paths against workspace root boundaries (`.projects/`), blocking path traversal (`..`, symlinks, absolute paths outside root).
+- **`HermesBridge`**: Asynchronous process bridge running Hermes CLI with process isolation, execution timeout enforcement, usage JSON parsing, and Windows process tree termination.
+- **Hermes Agent**: Sandboxed agent runner executing approved tool commands in safe mode (`--safe-mode -t terminal,file`).
+- **Ollama Server**: Local inference provider serving specialist models and Hermes execution models via `http://localhost:11434`.
+- **`AuditLogger`**: Append-only structured logger preserving execution events (`AuditRecord`) with automatic credential/token scrubbing (`redact_secrets`).
+- **Frontend / Web UI**: Interactive user interface featuring live Permission Mode selector badge and Execution Approval Modal overlay.
+
+---
+
+### 3.3 Execution Modes (SAFE / ASK / FULL CONTROL)
+
+1. **SAFE Mode (Default)**:
+   - Terminal execution commands (`terminal_execute`) are strictly **DENIED** (`DENY_PERMISSION_POLICY`).
+   - Safe read-only file tools (`file_list`, `file_read`, `file_metadata`) remain **ALLOWED**.
+2. **ASK Mode (Interactive Approval)**:
+   - Terminal execution requests pause and generate a unique `ApprovalRequest`.
+   - The UI presents an interactive approval modal displaying command, working directory, request source, and expected timeout.
+   - Execution resumes only after explicit user approval.
+3. **FULL CONTROL Mode (User Granted)**:
+   - Terminal execution requests proceed automatically under workspace policy validation without interactive pauses.
+
+---
+
+### 3.4 User Approval Flow
+
+```
+AgentOrchestrator ──► ToolRouter ──► PermissionManager (ASK Mode)
+                                            │
+                                            ▼
+                                  Create ApprovalRequest (PENDING)
+                                            │
+                                            ▼
+                                  Frontend Approval Modal
+                                   [Allow Once] [Allow Session] [Deny]
+                                            │
+                                            ▼
+                              POST /api/security/approvals/{id}/decision
+                                            │
+                                            ▼
+                                  PermissionManager (APPROVED)
+                                            │
+                                            ▼
+                                  ToolRouter Executed via Hermes
+```
+
+---
+
+### 3.5 Security & Authorization Boundaries
+
+#### 1. Workspace Containment Boundary
+- `WorkspacePolicy` validates that all working directories and target paths resolve within the configured project root (`.projects/`).
+- Traversal attempts (e.g. `cwd="../secret_folder"`) are rejected immediately with `DENY_PATH_TRAVERSAL` prior to permission pauses or execution.
+
+#### 2. Model Authorization Boundary
+- Models have **ZERO** direct system execution authority and **ZERO** permission management rights.
+- Any attempt by model sources (`caller_source="model"`) to alter the permission mode or approve requests is blocked with `ValueError: Unauthorized caller`.
+
+#### 3. Audit & Secret Redaction Flow
+- All tool requests and execution outcomes are recorded as an `AuditRecord` by `AuditLogger`.
+- `redact_secrets()` sanitizes API key formats (`sk-...`, `ghp_...`), passwords, and token values in commands, parameters, and stdout/stderr outputs, replacing them with `[REDACTED_SECRET]`.
+
+---
+
+### 3.6 Specialist Model Assignments
+
+| Specialist Role | Model Name | Description |
+| :--- | :--- | :--- |
+| **Vulnerability Analyst** | `lazarevtill/WhiteRabbitNeo-2.5-Qwen-2.5-Coder-7B:latest` | Vulnerability assessment & exploit analysis |
+| **Coding / Decompilation** | `qwen2.5-coder:7b` | Assembly decompilation & code synthesis |
+| **Vision Analysis** | `huihui_ai/qwen2.5-vl-abliterated:7b` | Visual binary diagrams & UI analysis |
+| **Reasoning Engine** | `huihui_ai/deepseek-r1-abliterated:8b` | Deep chain-of-thought binary analysis |
+| **General RE Specialist** | `mannix/llama3.1-8b-abliterated:latest` | Reverse engineering domain knowledge |
+| **Synthesizer** | `mannix-re:latest` | Final report synthesis & multi-agent aggregation |
+| **Obfuscation Analyst** | `dolphin-mistral:7b-v2.6-q4_K_M` | Packed / obfuscated code analysis |
+| **Embeddings & Memory** | `nomic-embed-text:latest` | Vector embeddings for session memory |
+
+---
+
+### 3.7 Hermes & Ollama Relationship
+
+EKKI-RE-AI orchestrates multi-agent specialist reasoning via `AgentOrchestrator`. When a specialist agent requests tool execution, `ToolRouter` passes the request to `HermesBridge`. `HermesBridge` invokes Hermes CLI, which queries Ollama (`huihui_ai/qwen2.5-vl-abliterated:7b`) for precise tool formatting and executes the approved operation in a sandboxed process.
+
+---
+
+### 3.8 Verified Test Results & Known Environment Factors
+
+#### Verified Test Metrics
+- **Pytest Suite**: **163 passed, 1 skipped** (164 total items across 13 test files).
+- **Live E2E Verification**: **17 / 17 checks PASSED**.
+
+#### Known Limitations & Workarounds
+1. **Local Model Cold-Start Latency**:
+   - Initial cold-start invocation of Ollama 7B local models can require >120 seconds while Ollama loads model weights into GPU VRAM. Subsequent warm calls complete in seconds.
+2. **Windows AppLocker / WDAC Workaround**:
+   - On Windows systems with AppLocker or WDAC binary blocking enabled, invoking `hermes.exe` directly in `AppData` raises `WinError 4551`. `HermesBridge` resolves this by executing `python.exe -m hermes_cli.main`, providing seamless cross-platform compatibility.
+

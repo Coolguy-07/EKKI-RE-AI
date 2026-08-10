@@ -52,8 +52,8 @@ class Settings(BaseSettings):
         description="Decompilation Specialist model identifier.",
     )
     VULN_ANALYST_MODEL: str = Field(
-        default="xploiter/pentester:latest",
-        description="Vulnerability Analyst model identifier.",
+        default="lazarevtill/WhiteRabbitNeo-2.5-Qwen-2.5-Coder-7B:latest",
+        description="Vulnerability Analyst / Cybersecurity Specialist model identifier.",
     )
     OBFUSCATION_MODEL: str = Field(
         default="dolphin-mistral:7b-v2.6-q4_K_M",
@@ -72,7 +72,7 @@ class Settings(BaseSettings):
 
     # --- Workspace Storage Settings ---
     PROJECTS_DIR: str = Field(
-        default="projects",
+        default=".projects",
         description="Root directory path for project workspaces stored on disk.",
     )
     MAX_UPLOAD_SIZE_MB: int = Field(
@@ -94,6 +94,44 @@ class Settings(BaseSettings):
     GHIDRA_TIMEOUT_SECONDS: int = Field(
         default=120,
         description="Maximum execution timeout in seconds for Ghidra headless analysis.",
+    )
+
+    # --- Hermes Agent Settings ---
+    HERMES_PATH: str = Field(
+        default="hermes",
+        description="Path to Hermes CLI executable. Use 'hermes' if in PATH, or full path.",
+    )
+    HERMES_DEFAULT_MODEL: str = Field(
+        default="huihui_ai/qwen2.5-vl-abliterated:7b",
+        description="Default model for Hermes execution (must have >=64K context).",
+    )
+    HERMES_DEFAULT_TIMEOUT_SECONDS: int = Field(
+        default=120,
+        description="Default timeout for Hermes execution in seconds.",
+    )
+    HERMES_MAX_TIMEOUT_SECONDS: int = Field(
+        default=600,
+        description="Maximum allowed timeout for Hermes execution in seconds.",
+    )
+    HERMES_WORKSPACE_ROOT: str = Field(
+        default=".projects",
+        description="Root directory for Hermes workspace scoping (maps to EKKI projects).",
+    )
+    HERMES_OLLAMA_HOST: str = Field(
+        default="http://localhost:11434",
+        description="Ollama endpoint for Hermes (OpenAI-compatible API).",
+    )
+    HERMES_SAFE_MODE: bool = Field(
+        default=True,
+        description="Run Hermes in safe mode (ignore user config, AGENTS.md, plugins, MCP).",
+    )
+    HERMES_DEFAULT_TOOLSETS: list[str] = Field(
+        default=["file"],
+        description="Default toolsets enabled for Hermes execution.",
+    )
+    HERMES_USAGE_DIR: str = Field(
+        default="C:\\Temp\\hermes_usage",
+        description="Directory for Hermes usage report JSON files.",
     )
 
     # Pydantic Settings Configuration

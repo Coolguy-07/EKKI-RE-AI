@@ -1,0 +1,12 @@
+{
+  "project_id": "proj-1786276461-cc8819",
+  "name": "TEST_FRONTEND",
+  "description": "",
+  "created_at": "2026-08-09T11:54:22.080597Z",
+  "updated_at": "2026-08-09T11:54:22.180249Z",
+  "status": "idle",
+  "model": "mannix-re:latest",
+  "tags": [],
+  "files": {},
+  "custom_metadata": {}
+}

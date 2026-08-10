@@ -10,6 +10,8 @@ const CONFIG = {
     STREAM_API_URL: 'http://127.0.0.1:8000/chat/stream',
     ORCHESTRATE_API_URL: 'http://127.0.0.1:8000/chat/orchestrate',
     PROJECTS_API_URL: 'http://127.0.0.1:8000/api/projects',
+    PERMISSIONS_API_URL: 'http://127.0.0.1:8000/api/security/permissions',
+    APPROVALS_API_URL: 'http://127.0.0.1:8000/api/security/approvals',
     STATUS: {
         READY: 'Ready',
         THINKING: 'Thinking...',
@@ -416,7 +418,7 @@ async function fetchActiveProjectForSession() {
                 activeProjectId = data.project_id;
                 activeProjectMetadata = data;
                 expandedProjectIds.add(data.project_id);
-            } else {
+            } else if (!activeProjectId) {
                 activeProjectId = null;
                 activeProjectMetadata = null;
             }
@@ -594,6 +596,7 @@ async function renderProjectsTree() {
  * Binds active project workspace for current session.
  */
 async function openProjectSession(projectId) {
+    logDiagnosticState('openProjectSession', 'ENTER', `projectId=${projectId}`);
     try {
         const sessionId = activeConversationId || 'default';
         const res = await fetch(`${CONFIG.PROJECTS_API_URL}/${projectId}/open`, {
@@ -606,18 +609,22 @@ async function openProjectSession(projectId) {
             activeProjectId = projectId;
             activeProjectMetadata = data.active_project;
             expandedProjectIds.add(projectId);
+            logDiagnosticState('openProjectSession', 'SESSION_OPENED', `activeProjId=${activeProjectId}`);
             updateActiveProjectHeaderUI();
             await fetchProjectsList();
         }
     } catch (err) {
         console.error('Failed to open project workspace session:', err);
     }
+    logDiagnosticState('openProjectSession', 'EXIT');
 }
 
 /**
  * Unbinds active project workspace for current session.
  */
 async function closeProjectSession(projectId) {
+    logDiagnosticState('closeProjectSession', 'ENTER', `projectId=${projectId}`);
+    console.trace('[DIAGNOSTIC STACK TRACE] closeProjectSession caller');
     try {
         const sessionId = activeConversationId || 'default';
         await fetch(`${CONFIG.PROJECTS_API_URL}/${projectId}/close`, {
@@ -632,6 +639,7 @@ async function closeProjectSession(projectId) {
     } catch (err) {
         console.error('Failed to close project workspace session:', err);
     }
+    logDiagnosticState('closeProjectSession', 'EXIT');
 }
 
 /**
@@ -731,28 +739,35 @@ async function handleCreateProjectSubmit(e) {
     const tags = tagsInput && tagsInput.value.trim() ? tagsInput.value.split(',').map(t => t.trim()) : [];
 
     try {
+        const payload = { name: nameInput.value.trim() };
+        if (descInput && descInput.value.trim()) {
+            payload.description = descInput.value.trim();
+        }
+        if (tags && tags.length > 0) {
+            payload.tags = tags;
+        }
+
         const res = await fetch(CONFIG.PROJECTS_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                name: nameInput.value.trim(),
-                description: descInput ? descInput.value.trim() : '',
-                tags: tags
-            })
+            body: JSON.stringify(payload)
         });
 
-        if (res.ok) {
-            const newProj = await res.json();
-            closeCreateProjectModal();
-            nameInput.value = '';
-            if (descInput) descInput.value = '';
-            if (tagsInput) tagsInput.value = '';
-
-            await openProjectSession(newProj.project_id);
+        if (!res.ok) {
+            const errData = await res.text();
+            throw new Error(`HTTP ${res.status}: ${errData}`);
         }
+
+        const newProj = await res.json();
+        closeCreateProjectModal();
+        nameInput.value = '';
+        if (descInput) descInput.value = '';
+        if (tagsInput) tagsInput.value = '';
+
+        await openProjectSession(newProj.project_id);
     } catch (err) {
         console.error('Failed to create project:', err);
-        alert('Could not create project workspace.');
+        alert(`Could not create project workspace: ${err.message}`);
     }
 }
 
@@ -826,15 +841,17 @@ async function openFileDetailsModal(projectId, fileMeta) {
     const machoTabBtn = document.getElementById('tab-btn-macho');
     const disasmTabBtn = document.getElementById('tab-btn-disasm');
     const ghidraTabBtn = document.getElementById('tab-btn-ghidra');
+    const yaraTabBtn = document.getElementById('tab-btn-yara');
 
     const fileUrl = `${CONFIG.PROJECTS_API_URL}/${projectId}/files/${fileMeta.file_id}`;
 
-    const [peRes, elfRes, machoRes, disasmRes, ghidraRes] = await Promise.allSettled([
+    const [peRes, elfRes, machoRes, disasmRes, ghidraRes, yaraRes] = await Promise.allSettled([
         fetch(`${fileUrl}/pe`).then(r => r.ok ? r.json() : null),
         fetch(`${fileUrl}/elf`).then(r => r.ok ? r.json() : null),
         fetch(`${fileUrl}/macho`).then(r => r.ok ? r.json() : null),
         fetch(`${fileUrl}/disassembly`).then(r => r.ok ? r.json() : null),
         fetch(`${fileUrl}/ghidra`).then(r => r.ok ? r.json() : null),
+        fetch(`${fileUrl}/yara`).then(r => r.ok ? r.json() : null),
     ]);
 
     // Handle PE payload
@@ -876,6 +893,84 @@ async function openFileDetailsModal(projectId, fileMeta) {
     } else if (ghidraTabBtn) {
         ghidraTabBtn.classList.add('hidden');
     }
+
+    // Handle YARA payload
+    if (yaraRes.status === 'fulfilled' && yaraRes.value && yaraRes.value.engine === 'yara_analysis') {
+        if (yaraTabBtn) yaraTabBtn.classList.remove('hidden');
+        renderYaraUI(yaraRes.value);
+    } else if (yaraTabBtn) {
+        yaraTabBtn.classList.add('hidden');
+    }
+}
+
+function closeFileDetailsModal() {
+    const timestamp = new Date().toISOString().split('T')[1];
+    console.log(
+        `%c[MODAL TRACE ${timestamp}] closeFileDetailsModal() CALLED | activeProj=${activeProjectId} | conv=${activeConversationId} | selProj=${selectedFileProjectId} | selFile=${selectedFileMeta?.filename} | modalClass=${fileDetailsModal?.className} | modalHidden=${fileDetailsModal?.classList.contains('hidden')}`,
+        'color: #ff0055; font-weight: bold; background: #330011; padding: 4px 8px; font-size: 14px;'
+    );
+    console.trace('[MODAL TRACE CALLSTACK] closeFileDetailsModal invocation');
+    if (fileDetailsModal) fileDetailsModal.classList.add('hidden');
+}
+
+/**
+ * Renders YARA Pattern Scanning Tab UI elements.
+ */
+function renderYaraUI(yaraData) {
+    if (!yaraData) return;
+
+    const statusBadge = document.getElementById('yara-val-status');
+    if (statusBadge) {
+        statusBadge.textContent = yaraData.scan_status || 'unknown';
+        statusBadge.className = yaraData.scan_status === 'failed' ? 'badge-tag red' : 'badge-tag green';
+    }
+
+    document.getElementById('yara-val-loaded').textContent = yaraData.rules_loaded || 0;
+    document.getElementById('yara-val-matches').textContent = yaraData.match_count || 0;
+    document.getElementById('yara-val-time').textContent = `${yaraData.execution_time_ms || 0}ms`;
+
+    const container = document.getElementById('yara-matches-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!yaraData.matches || yaraData.matches.length === 0) {
+        container.innerHTML = `<p class="disasm-no-data">No YARA pattern matches detected.</p>`;
+        return;
+    }
+
+    yaraData.matches.forEach(match => {
+        const item = document.createElement('div');
+        item.className = 'pe-import-card';
+        
+        let metaHtml = '';
+        if (match.meta) {
+            metaHtml = Object.entries(match.meta).map(([k, v]) => `<span class="badge-tag cyan">${escapeHtml(k)}: ${escapeHtml(String(v))}</span>`).join(' ');
+        }
+        let stringsHtml = '';
+        if (match.strings && match.strings.length > 0) {
+            stringsHtml = '<div style="margin-top: 8px;">';
+            match.strings.forEach(s => {
+                const offsets = s.instances.map(i => `0x${i.offset.toString(16)}`).join(', ');
+                stringsHtml += `<div class="font-mono" style="font-size: 0.85rem; color: #a0aec0;">${escapeHtml(s.identifier)}: ${escapeHtml(offsets)}</div>`;
+            });
+            stringsHtml += '</div>';
+        }
+
+        item.innerHTML = `
+            <div class="pe-import-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2">
+                    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+                    <line x1="4" y1="22" x2="4" y2="15"></line>
+                </svg>
+                <span>${escapeHtml(match.rule)} <span style="color:#a0aec0;font-size:0.9rem;">(Namespace: ${escapeHtml(match.namespace)})</span></span>
+            </div>
+            <div class="pe-import-funcs" style="padding-left: 24px; padding-bottom: 12px;">
+                ${metaHtml}
+                ${stringsHtml}
+            </div>
+        `;
+        container.appendChild(item);
+    });
 }
 
 /**
@@ -1918,20 +2013,159 @@ function setupDragAndDropZone() {
     }
 }
 
+// --- Security Permission & Approval Controller Functions ---
+let activeApprovalRequestId = null;
+
+async function fetchPermissionStatus() {
+    try {
+        const response = await fetch(CONFIG.PERMISSIONS_API_URL);
+        if (!response.ok) return;
+        const data = await response.json();
+        
+        const modeSelect = document.getElementById('permission-mode-select');
+        if (modeSelect && data.mode) {
+            modeSelect.value = data.mode;
+        }
+
+        if (data.pending_approvals && data.pending_approvals.length > 0) {
+            showApprovalModal(data.pending_approvals[0]);
+        }
+    } catch (e) {
+        console.warn('[SECURITY] Failed to fetch permission status:', e);
+    }
+}
+
+async function updatePermissionMode(mode) {
+    try {
+        const response = await fetch(`${CONFIG.PERMISSIONS_API_URL}/mode`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: mode })
+        });
+        if (response.ok) {
+            console.log(`[SECURITY] Execution mode updated to ${mode}`);
+            fetchPermissionStatus();
+        }
+    } catch (e) {
+        console.error('[SECURITY] Failed to update permission mode:', e);
+    }
+}
+
+function showApprovalModal(req) {
+    if (!req) return;
+    activeApprovalRequestId = req.request_id;
+
+    const modal = document.getElementById('approval-modal');
+    const toolVal = document.getElementById('approval-tool-val');
+    const cmdVal = document.getElementById('approval-command-val');
+    const cwdVal = document.getElementById('approval-cwd-val');
+    const srcVal = document.getElementById('approval-source-val');
+    const timeoutVal = document.getElementById('approval-timeout-val');
+
+    if (toolVal) toolVal.textContent = req.tool || '-';
+    if (cmdVal) cmdVal.textContent = req.command || '-';
+    if (cwdVal) cwdVal.textContent = req.cwd || '-';
+    if (srcVal) srcVal.textContent = req.request_source || '-';
+    if (timeoutVal) timeoutVal.textContent = `${req.timeout_seconds || 120} seconds`;
+
+    if (modal) modal.classList.remove('hidden');
+}
+
+function hideApprovalModal() {
+    activeApprovalRequestId = null;
+    const modal = document.getElementById('approval-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function submitApprovalDecision(action, scope = 'once') {
+    if (!activeApprovalRequestId) return;
+    try {
+        const url = `${CONFIG.APPROVALS_API_URL}/${activeApprovalRequestId}/decision`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: action, scope: scope, session_id: activeConversationId || 'default' })
+        });
+        if (response.ok) {
+            console.log(`[SECURITY] Submitted decision '${action}' (scope: ${scope}) for request ${activeApprovalRequestId}`);
+            hideApprovalModal();
+            fetchPermissionStatus();
+        }
+    } catch (e) {
+        console.error('[SECURITY] Failed to submit approval decision:', e);
+    }
+}
+
+function setupPermissionListeners() {
+    const modeSelect = document.getElementById('permission-mode-select');
+    if (modeSelect) {
+        modeSelect.addEventListener('change', (e) => {
+            updatePermissionMode(e.target.value);
+        });
+    }
+
+    const onceBtn = document.getElementById('approval-once-btn');
+    if (onceBtn) onceBtn.addEventListener('click', () => submitApprovalDecision('approve', 'once'));
+
+    const sessionBtn = document.getElementById('approval-session-btn');
+    if (sessionBtn) sessionBtn.addEventListener('click', () => submitApprovalDecision('approve', 'session'));
+
+    const denyBtn = document.getElementById('approval-deny-btn');
+    if (denyBtn) denyBtn.addEventListener('click', () => submitApprovalDecision('deny', 'once'));
+
+    const closeBtn = document.getElementById('close-approval-modal-btn');
+    if (closeBtn) closeBtn.addEventListener('click', hideApprovalModal);
+}
+
 function init() {
     if (window.marked && typeof window.marked.setOptions === 'function') {
         window.marked.setOptions({ gfm: true, breaks: true });
     }
 
+    // FORENSIC DIAGNOSTIC SUITE
+    window.addEventListener('error', (e) => {
+        console.error('%c[GLOBAL ERROR CAUGHT]', 'color: #ff0055; font-weight: bold;', e.error || e.message, e.filename, `L${e.lineno}:${e.colno}`);
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+        console.error('%c[UNHANDLED REJECTION CAUGHT]', 'color: #ff0055; font-weight: bold;', e.reason);
+    });
+
+    if (fileDetailsModal) {
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((m) => {
+                const timestamp = new Date().toISOString().split('T')[1];
+                console.log(
+                    `%c[MUTATION OBSERVER ${timestamp}] type=${m.type} target=${m.target.id || m.target.className} attr=${m.attributeName} oldVal=${m.oldValue} isConnected=${fileDetailsModal.isConnected} isHidden=${fileDetailsModal.classList.contains('hidden')}`,
+                    'color: #00ffaa; font-weight: bold; background: #002211; padding: 4px 8px; font-size: 14px;'
+                );
+                console.trace('[MUTATION OBSERVER CALLSTACK] DOM mutation trigger');
+            });
+        });
+        observer.observe(fileDetailsModal, { attributes: true, attributeFilter: ['class', 'style', 'hidden'], childList: true, subtree: true, attributeOldValue: true });
+        console.log('%c[DIAGNOSTIC] Comprehensive MutationObserver attached to #file-details-modal', 'color: #00f2fe; font-weight: bold;');
+    }
+
+    document.addEventListener('click', (e) => {
+        const timestamp = new Date().toISOString().split('T')[1];
+        if (fileDetailsModal && !fileDetailsModal.classList.contains('hidden')) {
+            console.log(
+                `%c[DOCUMENT CLICK ${timestamp}] target=${e.target.tagName}#${e.target.id}.${e.target.className} | modalContainsTarget=${fileDetailsModal.contains(e.target)}`,
+                'color: #ffaa00;'
+            );
+        }
+    }, true);
+
     loadStateFromStorage();
     setupSidebarListeners();
     setupWorkspaceListeners();
+    setupPermissionListeners();
     setupCopyButtonListener();
     setupTelemetryDashboard();
     setupDragAndDropZone();
 
     renderSidebarList();
     fetchProjectsList();
+    fetchPermissionStatus();
 
     if (activeConversationId) {
         loadConversation(activeConversationId);

@@ -25,6 +25,14 @@ from .agent_orchestrator import agent_orchestrator
 from .ai import AIClientError, ai_client
 from .analysis import BinaryMetadata
 from .config import settings
+from .security.audit_logger import AuditRecord, audit_logger
+from .security.permission_manager import (
+    SAFE_TOOLS,
+    ApprovalRequest,
+    ApprovalScope,
+    ExecutionMode,
+    permission_manager,
+)
 from .workspace import (
     FileNotFoundInWorkspaceError,
     InvalidWorkspacePathError,
@@ -116,6 +124,22 @@ class DeleteOperationResponse(BaseModel):
     message: str
 
 
+class PermissionModeUpdateRequest(BaseModel):
+    mode: str = Field(..., description="Target execution mode: SAFE, ASK, or FULL.")
+
+
+class ApprovalDecisionRequest(BaseModel):
+    action: str = Field(..., description="Decision action: 'approve' or 'deny'.")
+    scope: Optional[str] = Field("once", description="Approval scope: 'once' or 'session'.")
+    session_id: Optional[str] = Field("default", description="Active session ID.")
+
+
+class PermissionStatusResponse(BaseModel):
+    mode: str
+    pending_approvals: List[ApprovalRequest]
+    safe_tools: List[str]
+
+
 # Helper Function to Map Workspace Domain Exceptions to HTTP Status Codes
 def _handle_workspace_exception(err: Exception) -> HTTPException:
     if isinstance(err, ProjectNotFoundError):
@@ -150,6 +174,94 @@ def health_check() -> HealthCheckResponse:
         status="healthy",
         model=settings.MODEL_NAME,
     )
+
+
+# Security & Permission Management Endpoints
+@app.get(
+    "/api/security/permissions",
+    response_model=PermissionStatusResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get security permission status",
+    description="Returns current execution mode (SAFE, ASK, FULL), pending approvals, and allowed safe tools.",
+)
+def get_permissions() -> PermissionStatusResponse:
+    return PermissionStatusResponse(
+        mode=permission_manager.get_mode().value,
+        pending_approvals=permission_manager.get_pending_requests(),
+        safe_tools=sorted(list(SAFE_TOOLS)),
+    )
+
+
+@app.post(
+    "/api/security/permissions/mode",
+    response_model=PermissionStatusResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update execution mode",
+    description="Updates application execution mode (SAFE, ASK, FULL). User action required.",
+)
+def update_permission_mode(body: PermissionModeUpdateRequest) -> PermissionStatusResponse:
+    try:
+        new_mode = ExecutionMode(body.mode.strip().upper())
+        permission_manager.set_mode(new_mode, caller_source="user")
+        return PermissionStatusResponse(
+            mode=permission_manager.get_mode().value,
+            pending_approvals=permission_manager.get_pending_requests(),
+            safe_tools=sorted(list(SAFE_TOOLS)),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid execution mode '{body.mode}'. Allowed modes: SAFE, ASK, FULL.",
+        ) from e
+
+
+@app.get(
+    "/api/security/approvals",
+    response_model=List[ApprovalRequest],
+    status_code=status.HTTP_200_OK,
+    summary="Get pending approval requests",
+    description="Lists all pending execution approval requests waiting for user confirmation.",
+)
+def get_pending_approvals() -> List[ApprovalRequest]:
+    return permission_manager.get_pending_requests()
+
+
+@app.post(
+    "/api/security/approvals/{request_id}/decision",
+    response_model=ApprovalRequest,
+    status_code=status.HTTP_200_OK,
+    summary="Submit approval decision",
+    description="Submits user approval or denial decision ('approve' or 'deny', scope 'once' or 'session').",
+)
+def submit_approval_decision(
+    request_id: str = APIPath(..., description="Unique approval request ID"),
+    body: ApprovalDecisionRequest = ...,
+) -> ApprovalRequest:
+    try:
+        scope_enum = ApprovalScope(body.scope.lower()) if body.scope else ApprovalScope.ONCE
+        return permission_manager.submit_decision(
+            request_id=request_id,
+            action=body.action,
+            scope=scope_enum,
+            session_id=body.session_id,
+            caller_source="user",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+
+
+@app.get(
+    "/api/security/audit",
+    response_model=List[AuditRecord],
+    status_code=status.HTTP_200_OK,
+    summary="Get security audit log records",
+    description="Retrieves recent structured security audit log records.",
+)
+def get_audit_records() -> List[AuditRecord]:
+    return audit_logger.get_records()
 
 
 # Project Workspace Management REST API Endpoints
@@ -502,6 +614,23 @@ def get_macho_metadata(
 ) -> Dict[str, Any]:
     try:
         return workspace_manager.get_file_macho_metadata(project_id=project_id, file_id=file_id)
+    except Exception as err:
+        raise _handle_workspace_exception(err) from err
+
+
+@app.get(
+    "/api/projects/{project_id}/files/{file_id}/yara",
+    response_model=Dict[str, Any],
+    status_code=status.HTTP_200_OK,
+    summary="Get YARA pattern scanning artifact",
+    description="Retrieves structured YARA pattern matches stored under analysis/{file_id}/yara.json.",
+)
+def get_yara_metadata(
+    project_id: str = APIPath(..., description="Unique project identifier"),
+    file_id: str = APIPath(..., description="Immutable unique file identifier"),
+) -> Dict[str, Any]:
+    try:
+        return workspace_manager.get_file_yara_metadata(project_id=project_id, file_id=file_id)
     except Exception as err:
         raise _handle_workspace_exception(err) from err
 

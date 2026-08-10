@@ -19,263 +19,519 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
-    <!-- Application Script -->
-    <script src="script.js" defer></script>
+    <!-- Three.js & GSAP Animation Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
+    <!-- Application & 3D Engine Scripts -->
+    <script src="hero.js" defer></script>
+    <script src="marketing.js" defer></script>
+    <script src="script.js?v=2" defer></script>
 </head>
 <body>
 
-    <!-- Minimal Header (ChatGPT Desktop Style) -->
-    <header class="app-header">
-        <div class="header-container">
-            <div class="header-left">
-                <button id="sidebar-toggle-btn" class="icon-btn sidebar-toggle-btn" aria-label="Toggle sidebar" title="Toggle Sidebar">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                        <line x1="9" y1="3" x2="9" y2="21"></line>
-                    </svg>
-                </button>
-                
-                <div class="brand-wrapper">
-                    <svg class="brand-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                    </svg>
-                    <span class="app-title">EKKI-RE-AI</span>
-                </div>
+    <!-- Fixed WebGL Background Canvas -->
+    <canvas id="bg-canvas"></canvas>
 
-                <div class="header-project-badge" id="header-project-badge" title="Active Project Workspace">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                    </svg>
-                    <span id="header-project-name">No Active Project</span>
-                </div>
-            </div>
-
-            <div class="header-right">
-                <div class="model-badge" id="header-model-badge" title="Active Model">
-                    <span class="model-badge-dot"></span>
-                    <span id="header-model-name">mannix-re:latest</span>
-                </div>
-
-                <button id="monitor-toggle-btn" class="header-btn monitor-toggle-btn" title="System Monitor (Ctrl+K)">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                        <line x1="8" y1="21" x2="16" y2="21"></line>
-                        <line x1="12" y1="17" x2="12" y2="21"></line>
-                    </svg>
-                    <span>System Monitor</span>
-                </button>
-
-                <span class="status-badge" id="status-badge" aria-live="polite">Ready</span>
-            </div>
-        </div>
-    </header>
-
-    <!-- Main Wrapper -->
-    <div class="app-wrapper">
+    <!-- Marketing & Product Showcase View -->
+    <div id="marketing-view" class="marketing-view">
         
-        <!-- Compact Sidebar (~250px) -->
-        <aside id="sidebar" class="sidebar">
-            <div class="sidebar-header">
-                <button id="new-chat-btn" class="new-chat-btn">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    <span>New Chat</span>
-                </button>
+        <!-- Minimal Navigation Header -->
+        <nav class="marketing-nav">
+            <a href="#" class="marketing-nav-brand" id="marketing-brand-logo">
+                <span>EKKI-RE-AI</span>
+            </a>
+
+            <ul class="marketing-nav-links">
+                <li><a href="#hero" class="marketing-nav-link">INTELLIGENCE</a></li>
+                <li><a href="#intelligence" class="marketing-nav-link">ARCHITECTURE</a></li>
+                <li><a href="#capabilities" class="marketing-nav-link">CAPABILITIES</a></li>
+                <li><a href="#architecture" class="marketing-nav-link">SPECIALISTS</a></li>
+                <li><a href="#security" class="marketing-nav-link">SECURITY</a></li>
+            </ul>
+
+            <button id="nav-try-ekki-btn" class="marketing-nav-cta">
+                <span>TRY EKKI →</span>
+            </button>
+        </nav>
+
+        <!-- Hero Section -->
+        <section id="hero" class="marketing-hero">
+            <div class="hero-content-box">
+                <div class="hero-label-tag">EKKI INTELLIGENCE ECOSYSTEM</div>
+
+                <h1 class="hero-title">INTELLIGENCE,<br>REIMAGINED.</h1>
+                
+                <p class="hero-subtitle">A new generation of autonomous local AI built to reason, analyze, reverse engineer, and act.</p>
+
+                <div class="hero-actions">
+                    <button id="btn-try-ekki" class="hero-btn primary">
+                        <span>TRY EKKI →</span>
+                    </button>
+                    
+                    <a href="#capabilities" id="btn-explore-ekki" class="hero-btn secondary">
+                        <span>EXPLORE CAPABILITIES →</span>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Intelligence Architecture Section -->
+        <section id="intelligence" class="marketing-section">
+            <div class="section-header">
+                <div class="section-num">01 / ARCHITECTURE</div>
+                <h2 class="section-title">Autonomous Multi-Agent Matrix</h2>
+                <p class="section-subtitle">Intent-driven query routing, specialist model execution, and controlled tool isolation.</p>
             </div>
 
-            <!-- Project Workspaces Section -->
-            <div class="sidebar-section projects-section">
-                <div class="sidebar-section-header">
-                    <div class="section-title">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2">
+            <div class="arch-flow-minimal">
+                <div class="arch-flow-item">
+                    <span class="item-step">01</span>
+                    <span class="item-label">USER INTENT</span>
+                    <span class="item-sub">Prompt & Query Parsing</span>
+                </div>
+                <div class="arch-flow-divider">────────</div>
+                <div class="arch-flow-item active">
+                    <span class="item-step">02</span>
+                    <span class="item-label">INTENT ROUTER</span>
+                    <span class="item-sub">Domain Classification</span>
+                </div>
+                <div class="arch-flow-divider">────────</div>
+                <div class="arch-flow-item">
+                    <span class="item-step">03</span>
+                    <span class="item-label">ORCHESTRATOR</span>
+                    <span class="item-sub">Multi-Stage Synthesis</span>
+                </div>
+                <div class="arch-flow-divider">────────</div>
+                <div class="arch-flow-item">
+                    <span class="item-step">04</span>
+                    <span class="item-label">HERMES EXECUTION</span>
+                    <span class="item-sub">Tool & Terminal Sandbox</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Capabilities Spatial List Section -->
+        <section id="capabilities" class="marketing-section">
+            <div class="section-header">
+                <div class="section-num">02 / CAPABILITIES</div>
+                <h2 class="section-title">Multimodal Spatial Intelligence</h2>
+                <p class="section-subtitle">EKKI combines specialized local neural models across six core analytical domains.</p>
+            </div>
+
+            <div class="spatial-list">
+                <div class="spatial-item">
+                    <span class="spatial-num">01</span>
+                    <div class="spatial-content">
+                        <h3 class="spatial-title">REASON</h3>
+                        <p class="spatial-desc">Step-by-step logic verification, mathematical problem solving, and formal hypothesis validation.</p>
+                    </div>
+                </div>
+
+                <div class="spatial-item">
+                    <span class="spatial-num">02</span>
+                    <div class="spatial-content">
+                        <h3 class="spatial-title">CODE</h3>
+                        <p class="spatial-desc">Advanced decompilation, binary control-flow reconstruction, assembly analysis, and source generation.</p>
+                    </div>
+                </div>
+
+                <div class="spatial-item">
+                    <span class="spatial-num">03</span>
+                    <div class="spatial-content">
+                        <h3 class="spatial-title">SEE</h3>
+                        <p class="spatial-desc">Visual recognition of program flowcharts, GUI mockups, architectural diagrams, and memory maps.</p>
+                    </div>
+                </div>
+
+                <div class="spatial-item">
+                    <span class="spatial-num">04</span>
+                    <div class="spatial-content">
+                        <h3 class="spatial-title">ACT</h3>
+                        <p class="spatial-desc">Hermes agent execution layer for running controlled local tools, terminal commands, and scripts.</p>
+                    </div>
+                </div>
+
+                <div class="spatial-item">
+                    <span class="spatial-num">05</span>
+                    <div class="spatial-content">
+                        <h3 class="spatial-title">ANALYZE</h3>
+                        <p class="spatial-desc">Autonomous identification of memory corruption, buffer overflows, and security vulnerabilities.</p>
+                    </div>
+                </div>
+
+                <div class="spatial-item">
+                    <span class="spatial-num">06</span>
+                    <div class="spatial-content">
+                        <h3 class="spatial-title">RESEARCH</h3>
+                        <p class="spatial-desc">De-obfuscation of protected code binaries, packed executables, and complex string encryptions.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Specialist Intelligence Section -->
+        <section id="architecture" class="marketing-section">
+            <div class="section-header">
+                <div class="section-num">03 / SPECIALISTS</div>
+                <h2 class="section-title">Specialist Model Matrix</h2>
+                <p class="section-subtitle">Real specialized models configured for targeted reverse engineering tasks.</p>
+            </div>
+
+            <div class="constellation-list">
+                <div class="constellation-row">
+                    <span class="constellation-role">Vulnerability Intelligence</span>
+                    <span class="constellation-model">WhiteRabbitNeo 2.5 Coder 7B</span>
+                </div>
+
+                <div class="constellation-row">
+                    <span class="constellation-role">Code Intelligence</span>
+                    <span class="constellation-model">Qwen 2.5 Coder 7B</span>
+                </div>
+
+                <div class="constellation-row">
+                    <span class="constellation-role">Vision Intelligence</span>
+                    <span class="constellation-model">Qwen 2.5 VL Abliterated 7B</span>
+                </div>
+
+                <div class="constellation-row">
+                    <span class="constellation-role">Reasoning Engine</span>
+                    <span class="constellation-model">DeepSeek R1 Abliterated 8B</span>
+                </div>
+
+                <div class="constellation-row">
+                    <span class="constellation-role">Reverse Engineering</span>
+                    <span class="constellation-model">Llama 3.1 Abliterated 8B</span>
+                </div>
+
+                <div class="constellation-row">
+                    <span class="constellation-role">Synthesis Engine</span>
+                    <span class="constellation-model">Mannix RE Specialized</span>
+                </div>
+
+                <div class="constellation-row">
+                    <span class="constellation-role">Obfuscation Analysis</span>
+                    <span class="constellation-model">Dolphin Mistral 7B</span>
+                </div>
+
+                <div class="constellation-row">
+                    <span class="constellation-role">Memory & Embeddings</span>
+                    <span class="constellation-model">Nomic Embed Text</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Security Control Timeline Section -->
+        <section id="security" class="marketing-section">
+            <div class="section-header">
+                <div class="section-tag">04 / SECURITY</div>
+                <h2 class="section-title">Execution Permission Boundaries</h2>
+                <p class="section-subtitle">Local-first inference with user-enforced execution containment.</p>
+            </div>
+
+            <div class="security-timeline">
+                <div class="timeline-mode">
+                    <span class="mode-tag safe">SAFE</span>
+                    <h3 class="mode-title">Read-Only Intelligence</h3>
+                    <p class="mode-desc">Strictly blocks all terminal and filesystem mutating tools. Safe for passive analysis.</p>
+                </div>
+
+                <div class="timeline-line"></div>
+
+                <div class="timeline-mode active">
+                    <span class="mode-tag ask">ASK</span>
+                    <h3 class="mode-title">Human-Approved Execution</h3>
+                    <p class="mode-desc">Pauses execution for explicit user authorization before running local tools.</p>
+                </div>
+
+                <div class="timeline-line"></div>
+
+                <div class="timeline-mode">
+                    <span class="mode-tag full">FULL CONTROL</span>
+                    <h3 class="mode-title">Autonomous Execution</h3>
+                    <p class="mode-desc">Allows Hermes agents to run commands subject to workspace path containment and audit logging.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Future Climax Section -->
+        <section id="climax" class="future-climax-section">
+            <h2 class="climax-headline">THE FUTURE IS NOT SOMETHING WE WAIT FOR.<br>WE BUILD IT.</h2>
+            <button id="hero-console-launch-btn" class="hero-btn primary">
+                <span>LAUNCH EKKI CONSOLE →</span>
+            </button>
+        </section>
+
+    </div>
+
+    <!-- Console / Application Workspace View -->
+    <div id="console-view" class="console-view hidden-view">
+
+        <!-- Minimal Header (ChatGPT Desktop Style) -->
+        <header class="app-header">
+            <div class="header-container">
+                <div class="header-left">
+                    <button id="sidebar-toggle-btn" class="icon-btn sidebar-toggle-btn" aria-label="Toggle sidebar" title="Toggle Sidebar">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="9" y1="3" x2="9" y2="21"></line>
+                        </svg>
+                    </button>
+                    
+                    <div class="brand-wrapper" id="console-brand-home-btn" style="cursor: pointer;" title="Return to Landing Page">
+                        <svg class="brand-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                        </svg>
+                        <span class="app-title">EKKI-RE-AI</span>
+                    </div>
+
+                    <div class="header-project-badge" id="header-project-badge" title="Active Project Workspace">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                         </svg>
-                        <span>Project Workspaces</span>
+                        <span id="header-project-name">No Active Project</span>
                     </div>
-                    <button id="new-project-btn" class="icon-btn-sm" title="Create New Project">
+                </div>
+
+                <div class="header-right">
+                    <div class="model-badge permission-badge" id="header-permission-badge" title="Execution Permission Mode (SAFE / ASK / FULL)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                        <select id="permission-mode-select" class="permission-mode-select" title="Change Execution Permission Mode">
+                            <option value="SAFE">Mode: SAFE</option>
+                            <option value="ASK" selected>Mode: ASK</option>
+                            <option value="FULL">Mode: FULL CONTROL</option>
+                        </select>
+                    </div>
+
+                    <div class="model-badge" id="header-model-badge" title="Active Model">
+                        <span class="model-badge-dot"></span>
+                        <span id="header-model-name">mannix-re:latest</span>
+                    </div>
+
+                    <button id="monitor-toggle-btn" class="header-btn monitor-toggle-btn" title="System Monitor (Ctrl+K)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                            <line x1="8" y1="21" x2="16" y2="21"></line>
+                            <line x1="12" y1="17" x2="12" y2="21"></line>
+                        </svg>
+                        <span>System Monitor</span>
+                    </button>
+
+                    <span class="status-badge" id="status-badge" aria-live="polite">Ready</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Wrapper -->
+        <div class="app-wrapper">
+            
+            <!-- Compact Sidebar (~250px) -->
+            <aside id="sidebar" class="sidebar">
+                <div class="sidebar-header">
+                    <button id="new-chat-btn" class="new-chat-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="12" y1="5" x2="12" y2="19"></line>
                             <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span>New Chat</span>
+                    </button>
+                </div>
+
+                <!-- Project Workspaces Section -->
+                <div class="sidebar-section projects-section">
+                    <div class="sidebar-section-header">
+                        <div class="section-title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                            <span>Project Workspaces</span>
+                        </div>
+                        <button id="new-project-btn" class="icon-btn-sm" title="Create New Project">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div id="projects-tree-container" class="projects-tree-container">
+                        <!-- Dynamic project explorer items -->
+                    </div>
+                </div>
+
+                <!-- Conversation History Section -->
+                <div class="sidebar-section conversations-section">
+                    <div class="sidebar-search">
+                        <div class="search-input-wrapper">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <input type="text" id="history-search-input" placeholder="Search chats..." autocomplete="off">
+                        </div>
+                    </div>
+
+                    <div class="sidebar-history-container">
+                        <ul id="conversation-list" class="conversation-list">
+                            <!-- Dynamic conversation items -->
+                        </ul>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Sidebar Overlay for Mobile -->
+            <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+            <!-- Chat-First Main Stage -->
+            <main class="app-main">
+
+                <!-- Chat Area -->
+                <section class="chat-container" id="chat-container" aria-label="Chat Area">
+
+                    <!-- Simple Clean Empty Chat Screen (ChatGPT style) -->
+                    <div class="empty-chat-screen" id="empty-chat-screen">
+                        <div class="empty-chat-logo">
+                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="1.8">
+                                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                            </svg>
+                        </div>
+                        <h2 class="empty-chat-title">What can I help you analyze today?</h2>
+                        <p class="empty-chat-sub" id="empty-chat-sub">Select or create a Project Workspace in the sidebar to organize your analysis files.</p>
+                    </div>
+
+                    <div class="messages-list" id="messages-list" role="log" aria-live="polite">
+                        <!-- Dynamic chat message cards -->
+                    </div>
+                </section>
+
+                <!-- Floating Prompt Box Area (ChatGPT Desktop Style) -->
+                <section class="input-section" aria-label="Prompt Input">
+                    
+                    <div class="dropzone-overlay" id="dropzone-overlay">
+                        <div class="dropzone-box">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <span>Drop File to Upload to Active Project</span>
+                        </div>
+                    </div>
+
+                    <form id="chat-form" class="chat-form">
+                        <div class="attachment-chips-container" id="attachment-chips"></div>
+
+                        <div class="input-wrapper">
+                            <button type="button" id="file-upload-btn" class="icon-btn file-upload-btn" title="Upload file to Project Workspace">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                                </svg>
+                            </button>
+                            <input type="file" id="file-input" hidden accept="*/*">
+                            <input type="file" id="project-file-input" hidden accept="*/*">
+
+                            <textarea 
+                                id="prompt-input" 
+                                name="prompt" 
+                                class="prompt-input" 
+                                placeholder="Ask EKKI-RE-AI or paste assembly, pseudocode, or hex..." 
+                                rows="1" 
+                                required 
+                                aria-required="true"
+                            ></textarea>
+
+                            <button type="submit" id="send-button" class="send-button" aria-label="Send message">
+                                <svg class="send-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div class="input-footer-hint">
+                            <span>Local Ollama LLM • Reverse Engineering Specialized</span>
+                        </div>
+                    </form>
+                </section>
+            </main>
+
+            <!-- Hidden System Monitor Drawer (Opens on Ctrl+K or button click) -->
+            <aside id="status-dashboard" class="status-dashboard">
+                <div class="dashboard-header">
+                    <div class="dashboard-title">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                            <line x1="8" y1="21" x2="16" y2="21"></line>
+                            <line x1="12" y1="17" x2="12" y2="21"></line>
+                        </svg>
+                        <span>System Monitor</span>
+                    </div>
+                    <button id="close-monitor-btn" class="icon-btn close-monitor-btn" aria-label="Close monitor">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
                 </div>
 
-                <div id="projects-tree-container" class="projects-tree-container">
-                    <!-- Dynamic project explorer items -->
-                </div>
-            </div>
-
-            <!-- Conversation History Section -->
-            <div class="sidebar-section conversations-section">
-                <div class="sidebar-search">
-                    <div class="search-input-wrapper">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                        </svg>
-                        <input type="text" id="history-search-input" placeholder="Search chats..." autocomplete="off">
-                    </div>
-                </div>
-
-                <div class="sidebar-history-container">
-                    <ul id="conversation-list" class="conversation-list">
-                        <!-- Dynamic conversation items -->
-                    </ul>
-                </div>
-            </div>
-        </aside>
-
-        <!-- Sidebar Overlay for Mobile -->
-        <div id="sidebar-overlay" class="sidebar-overlay"></div>
-
-        <!-- Chat-First Main Stage -->
-        <main class="app-main">
-
-            <!-- Chat Area -->
-            <section class="chat-container" id="chat-container" aria-label="Chat Area">
-
-                <!-- Simple Clean Empty Chat Screen (ChatGPT style) -->
-                <div class="empty-chat-screen" id="empty-chat-screen">
-                    <div class="empty-chat-logo">
-                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="1.8">
-                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                        </svg>
-                    </div>
-                    <h2 class="empty-chat-title">What can I help you analyze today?</h2>
-                    <p class="empty-chat-sub" id="empty-chat-sub">Select or create a Project Workspace in the sidebar to organize your analysis files.</p>
-                </div>
-
-                <div class="messages-list" id="messages-list" role="log" aria-live="polite">
-                    <!-- Dynamic chat message cards -->
-                </div>
-            </section>
-
-            <!-- Floating Prompt Box Area (ChatGPT Desktop Style) -->
-            <section class="input-section" aria-label="Prompt Input">
-                
-                <div class="dropzone-overlay" id="dropzone-overlay">
-                    <div class="dropzone-box">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="17 8 12 3 7 8"></polyline>
-                            <line x1="12" y1="3" x2="12" y2="15"></line>
-                        </svg>
-                        <span>Drop File to Upload to Active Project</span>
-                    </div>
-                </div>
-
-                <form id="chat-form" class="chat-form">
-                    <div class="attachment-chips-container" id="attachment-chips"></div>
-
-                    <div class="input-wrapper">
-                        <button type="button" id="file-upload-btn" class="icon-btn file-upload-btn" title="Upload file to Project Workspace">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
-                            </svg>
-                        </button>
-                        <input type="file" id="file-input" hidden accept="*/*">
-                        <input type="file" id="project-file-input" hidden accept="*/*">
-
-                        <textarea 
-                            id="prompt-input" 
-                            name="prompt" 
-                            class="prompt-input" 
-                            placeholder="Ask EKKI-RE-AI or paste assembly, pseudocode, or hex..." 
-                            rows="1" 
-                            required 
-                            aria-required="true"
-                        ></textarea>
-
-                        <button type="submit" id="send-button" class="send-button" aria-label="Send message">
-                            <svg class="send-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="22" y1="2" x2="11" y2="13"></line>
-                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                            </svg>
-                        </button>
+                <div class="dashboard-content">
+                    <div class="telemetry-card">
+                        <div class="card-header-sm">
+                            <span class="card-label">Backend Connection</span>
+                            <span class="telemetry-status-dot connected" id="telemetry-conn-dot"></span>
+                        </div>
+                        <div class="telemetry-value" id="telemetry-conn-val">127.0.0.1:8000 (Healthy)</div>
                     </div>
 
-                    <div class="input-footer-hint">
-                        <span>Local Ollama LLM • Reverse Engineering Specialized</span>
+                    <div class="telemetry-card">
+                        <div class="card-header-sm">
+                            <span class="card-label">Configured LLM Model</span>
+                        </div>
+                        <div class="telemetry-value cyan-text" id="telemetry-model-val">mannix-re:latest</div>
                     </div>
-                </form>
-            </section>
-        </main>
 
-        <!-- Hidden System Monitor Drawer (Opens on Ctrl+K or button click) -->
-        <aside id="status-dashboard" class="status-dashboard">
-            <div class="dashboard-header">
-                <div class="dashboard-title">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2">
-                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                        <line x1="8" y1="21" x2="16" y2="21"></line>
-                        <line x1="12" y1="17" x2="12" y2="21"></line>
-                    </svg>
-                    <span>System Monitor</span>
-                </div>
-                <button id="close-monitor-btn" class="icon-btn close-monitor-btn" aria-label="Close monitor">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </button>
-            </div>
+                    <div class="telemetry-card">
+                        <div class="card-header-sm">
+                            <span class="card-label">VRAM Evacuation Protocol</span>
+                            <span class="badge-tag green" id="vram-status-tag">0MB (Evacuated)</span>
+                        </div>
+                        <div class="telemetry-progress-wrapper">
+                            <div class="telemetry-progress-fill" id="vram-progress-fill" style="width: 0%;"></div>
+                        </div>
+                        <div class="telemetry-sub">keep_alive: 0 VRAM eviction active</div>
+                    </div>
 
-            <div class="dashboard-content">
-                <div class="telemetry-card">
-                    <div class="card-header-sm">
-                        <span class="card-label">Backend Connection</span>
-                        <span class="telemetry-status-dot connected" id="telemetry-conn-dot"></span>
+                    <div class="telemetry-card">
+                        <div class="card-header-sm">
+                            <span class="card-label">Context Window</span>
+                            <span class="telemetry-sub-val" id="context-val">4096 / 8192</span>
+                        </div>
+                        <div class="telemetry-progress-wrapper">
+                            <div class="telemetry-progress-fill purple" id="context-progress-fill" style="width: 50%;"></div>
+                        </div>
                     </div>
-                    <div class="telemetry-value" id="telemetry-conn-val">127.0.0.1:8000 (Healthy)</div>
-                </div>
 
-                <div class="telemetry-card">
-                    <div class="card-header-sm">
-                        <span class="card-label">Configured LLM Model</span>
+                    <div class="telemetry-card">
+                        <div class="card-header-sm">
+                            <span class="card-label">Active Agent</span>
+                        </div>
+                        <div class="telemetry-value purple-text" id="telemetry-agent-val">Lead Synthesizer</div>
                     </div>
-                    <div class="telemetry-value cyan-text" id="telemetry-model-val">mannix-re:latest</div>
-                </div>
 
-                <div class="telemetry-card">
-                    <div class="card-header-sm">
-                        <span class="card-label">VRAM Evacuation Protocol</span>
-                        <span class="badge-tag green" id="vram-status-tag">0MB (Evacuated)</span>
-                    </div>
-                    <div class="telemetry-progress-wrapper">
-                        <div class="telemetry-progress-fill" id="vram-progress-fill" style="width: 0%;"></div>
-                    </div>
-                    <div class="telemetry-sub">keep_alive: 0 VRAM eviction active</div>
-                </div>
-
-                <div class="telemetry-card">
-                    <div class="card-header-sm">
-                        <span class="card-label">Context Window</span>
-                        <span class="telemetry-sub-val" id="context-val">4096 / 8192</span>
-                    </div>
-                    <div class="telemetry-progress-wrapper">
-                        <div class="telemetry-progress-fill purple" id="context-progress-fill" style="width: 50%;"></div>
+                    <div class="telemetry-card">
+                        <div class="card-header-sm">
+                            <span class="card-label">Session Memory Isolation</span>
+                        </div>
+                        <div class="telemetry-value" id="telemetry-session-val">conv-default</div>
                     </div>
                 </div>
+            </aside>
 
-                <div class="telemetry-card">
-                    <div class="card-header-sm">
-                        <span class="card-label">Active Agent</span>
-                    </div>
-                    <div class="telemetry-value purple-text" id="telemetry-agent-val">Lead Synthesizer</div>
-                </div>
-
-                <div class="telemetry-card">
-                    <div class="card-header-sm">
-                        <span class="card-label">Session Memory Isolation</span>
-                    </div>
-                    <div class="telemetry-value" id="telemetry-session-val">conv-default</div>
-                </div>
-            </div>
-        </aside>
-
-    </div>
+        </div>
+    </div>>
 
     <!-- Create Project Modal -->
     <div id="create-project-modal" class="modal-overlay hidden">
@@ -343,6 +599,7 @@
                     <button type="button" class="modal-tab-btn hidden" id="tab-btn-macho" data-tab="tab-macho">Mach-O Information</button>
                     <button type="button" class="modal-tab-btn hidden" id="tab-btn-disasm" data-tab="tab-disasm">Disassembly</button>
                     <button type="button" class="modal-tab-btn hidden" id="tab-btn-ghidra" data-tab="tab-ghidra">Ghidra</button>
+                    <button type="button" class="modal-tab-btn hidden" id="tab-btn-yara" data-tab="tab-yara">YARA</button>
                 </div>
 
                 <!-- Tab 1: General Metadata -->
@@ -809,6 +1066,35 @@
                     </div>
                 </div>
 
+                <!-- Tab 7: YARA Pattern Scanning -->
+                <div class="modal-tab-pane hidden" id="tab-yara">
+                    <div class="meta-grid">
+                        <div class="meta-item">
+                            <span class="meta-label">Scan Status:</span>
+                            <span class="badge-tag" id="yara-val-status">---</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Rules Loaded:</span>
+                            <span class="meta-value font-mono cyan-text" id="yara-val-loaded">0</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Match Count:</span>
+                            <span class="meta-value font-mono" id="yara-val-matches">0</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Execution Time:</span>
+                            <span class="meta-value" id="yara-val-time">0ms</span>
+                        </div>
+                    </div>
+                    
+                    <div class="pe-section-block">
+                        <h4 class="pe-block-title">YARA Rule Matches</h4>
+                        <div class="yara-matches-list" id="yara-matches-container">
+                            <p class="disasm-no-data" id="yara-no-matches">No YARA pattern matches detected.</p>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
             <div class="modal-actions border-top">
@@ -843,6 +1129,48 @@
                     </svg>
                     <span>Delete</span>
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Execution Approval Modal -->
+    <div id="approval-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="approval-modal-title">
+        <div class="modal-card approval-modal-card">
+            <div class="modal-header">
+                <h3 id="approval-modal-title" class="modal-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffb703" stroke-width="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                    Execution Approval Required
+                </h3>
+                <button id="close-approval-modal-btn" class="modal-close-btn" aria-label="Close modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="approval-description">An agent requested command execution requiring user authorization.</p>
+                
+                <div class="approval-details-grid">
+                    <div class="detail-label">Requested Tool:</div>
+                    <div class="detail-value" id="approval-tool-val">terminal_execute</div>
+                    
+                    <div class="detail-label">Command:</div>
+                    <div class="detail-value code-val" id="approval-command-val">-</div>
+                    
+                    <div class="detail-label">Working Dir:</div>
+                    <div class="detail-value" id="approval-cwd-val">-</div>
+                    
+                    <div class="detail-label">Request Source:</div>
+                    <div class="detail-value" id="approval-source-val">AgentOrchestrator</div>
+                    
+                    <div class="detail-label">Timeout Limit:</div>
+                    <div class="detail-value" id="approval-timeout-val">120 seconds</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="approval-deny-btn" class="btn btn-danger">Deny Execution</button>
+                <button id="approval-once-btn" class="btn btn-primary">Allow Once</button>
+                <button id="approval-session-btn" class="btn btn-success">Allow for Session</button>
             </div>
         </div>
     </div>

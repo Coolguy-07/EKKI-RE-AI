@@ -114,6 +114,43 @@ class TestWorkspaceAPI(unittest.TestCase):
         self.assertEqual(res_active_none.status_code, 200)
         self.assertIsNone(res_active_none.json())
 
+    def test_session_isolation_and_explicit_close(self) -> None:
+        """Verify strict session isolation: opening project under 'default' returns None for a new session_id, and explicit close clears state."""
+        # 1. Create project
+        res_proj = self.client.post("/api/projects", json={"name": "Isolation Test Project"})
+        project_id = res_proj.json()["project_id"]
+
+        # 2. Open under 'default' session
+        res_open = self.client.post(
+            f"/api/projects/{project_id}/open",
+            json={"session_id": "default"},
+        )
+        self.assertEqual(res_open.status_code, 200)
+
+        # 3. Query under new session ID (simulating new conversation created after opening project)
+        res_new_session = self.client.get("/api/projects/active/conv-new-session-12345")
+        self.assertEqual(res_new_session.status_code, 200)
+        # Must return None for session isolation, without leaking 'default' project
+        self.assertIsNone(res_new_session.json())
+
+        # 4. Confirm default session STILL has active project
+        res_default_session = self.client.get("/api/projects/active/default")
+        self.assertEqual(res_default_session.status_code, 200)
+        self.assertEqual(res_default_session.json()["project_id"], project_id)
+
+        # 5. Explicitly close project on default session
+        res_close = self.client.post(
+            f"/api/projects/{project_id}/close",
+            json={"session_id": "default"},
+        )
+        self.assertEqual(res_close.status_code, 200)
+
+        # 6. Confirm default session active project is now cleanly cleared
+        res_default_after_close = self.client.get("/api/projects/active/default")
+        self.assertEqual(res_default_after_close.status_code, 200)
+        self.assertIsNone(res_default_after_close.json())
+
+
     def test_non_existent_session_close_api(self) -> None:
         """Verify closing a session that was never opened handles cleanly without errors."""
         res_proj = self.client.post("/api/projects", json={"name": "NonExistent Session Test"})

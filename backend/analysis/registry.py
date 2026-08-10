@@ -20,6 +20,7 @@ from .ghidra_engine import GhidraAnalysisEngine
 from .macho_parser import MachOParserEngine
 from .models import BinaryMetadata, CURRENT_SCHEMA_VERSION
 from .pe_parser import PEParserEngine
+from .yara_engine import YaraAnalysisEngine
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ class AnalysisPipeline:
         self.register_engine(PEParserEngine())
         self.register_engine(ELFParserEngine())
         self.register_engine(MachOParserEngine())
+        self.register_engine(YaraAnalysisEngine())
         self.register_engine(CapstoneDisassemblyEngine())
         self.register_engine(GhidraAnalysisEngine())
 
@@ -147,6 +149,14 @@ class AnalysisPipeline:
                 macho_engine.save_macho_artifact(project_dir, file_id, engine_meta["macho_parser"]["parsed_data"])
             except Exception as err:
                 logger.error("Failed to persist macho.json artifact for file_id='%s': %s", file_id, err)
+
+        # Save artifact under analysis/{file_id}/yara.json if yara_analysis output is present
+        if "yara_analysis" in engine_meta and "parsed_data" in engine_meta["yara_analysis"]:
+            try:
+                yara_engine = YaraAnalysisEngine()
+                yara_engine.save_yara_artifact(project_dir, file_id, engine_meta["yara_analysis"]["parsed_data"])
+            except Exception as err:
+                logger.error("Failed to persist yara.json artifact for file_id='%s': %s", file_id, err)
 
         # Save artifact under analysis/{file_id}/disassembly.json if capstone output is present
         if "capstone_disassembly" in engine_meta and "parsed_data" in engine_meta["capstone_disassembly"]:

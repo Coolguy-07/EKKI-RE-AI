@@ -18,6 +18,7 @@ from .ai import extract_ollama_response_content
 from .config import settings
 from .memory import ChatMessage, session_memory_manager
 from .prompts import GLOBAL_SYSTEM_PROMPT
+from .tool_router import ToolRouter, ToolRequest, ToolExecutionResult
 
 logger = logging.getLogger(__name__)
 
@@ -188,11 +189,20 @@ class IntentRouter:
 class AgentOrchestrator:
     """Async Multi-Agent Orchestrator with strict VRAM cleanup (keep_alive: 0) and SSE streaming."""
 
-    def __init__(self, host: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        host: Optional[str] = None,
+        tool_router: Optional[ToolRouter] = None,
+    ) -> None:
         self.host = host or settings.OLLAMA_HOST
         self._client = Client(host=self.host)
         self.registry = AgentRegistry()
         self.router = IntentRouter(self.registry)
+        self.tool_router = tool_router or ToolRouter()
+
+    async def execute_tool(self, request: ToolRequest) -> ToolExecutionResult:
+        """Requests controlled tool execution strictly through ToolRouter security boundary."""
+        return await self.tool_router.execute_tool(request)
 
     def unload_model(self, model_name: str) -> bool:
         """Evicts a loaded model from GPU VRAM by issuing a keep_alive: 0 request."""
