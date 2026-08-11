@@ -596,7 +596,6 @@ async function renderProjectsTree() {
  * Binds active project workspace for current session.
  */
 async function openProjectSession(projectId) {
-    logDiagnosticState('openProjectSession', 'ENTER', `projectId=${projectId}`);
     try {
         const sessionId = activeConversationId || 'default';
         const res = await fetch(`${CONFIG.PROJECTS_API_URL}/${projectId}/open`, {
@@ -609,22 +608,18 @@ async function openProjectSession(projectId) {
             activeProjectId = projectId;
             activeProjectMetadata = data.active_project;
             expandedProjectIds.add(projectId);
-            logDiagnosticState('openProjectSession', 'SESSION_OPENED', `activeProjId=${activeProjectId}`);
             updateActiveProjectHeaderUI();
             await fetchProjectsList();
         }
     } catch (err) {
         console.error('Failed to open project workspace session:', err);
     }
-    logDiagnosticState('openProjectSession', 'EXIT');
 }
 
 /**
  * Unbinds active project workspace for current session.
  */
 async function closeProjectSession(projectId) {
-    logDiagnosticState('closeProjectSession', 'ENTER', `projectId=${projectId}`);
-    console.trace('[DIAGNOSTIC STACK TRACE] closeProjectSession caller');
     try {
         const sessionId = activeConversationId || 'default';
         await fetch(`${CONFIG.PROJECTS_API_URL}/${projectId}/close`, {
@@ -639,7 +634,6 @@ async function closeProjectSession(projectId) {
     } catch (err) {
         console.error('Failed to close project workspace session:', err);
     }
-    logDiagnosticState('closeProjectSession', 'EXIT');
 }
 
 /**
@@ -904,12 +898,6 @@ async function openFileDetailsModal(projectId, fileMeta) {
 }
 
 function closeFileDetailsModal() {
-    const timestamp = new Date().toISOString().split('T')[1];
-    console.log(
-        `%c[MODAL TRACE ${timestamp}] closeFileDetailsModal() CALLED | activeProj=${activeProjectId} | conv=${activeConversationId} | selProj=${selectedFileProjectId} | selFile=${selectedFileMeta?.filename} | modalClass=${fileDetailsModal?.className} | modalHidden=${fileDetailsModal?.classList.contains('hidden')}`,
-        'color: #ff0055; font-weight: bold; background: #330011; padding: 4px 8px; font-size: 14px;'
-    );
-    console.trace('[MODAL TRACE CALLSTACK] closeFileDetailsModal invocation');
     if (fileDetailsModal) fileDetailsModal.classList.add('hidden');
 }
 
@@ -2122,38 +2110,13 @@ function init() {
         window.marked.setOptions({ gfm: true, breaks: true });
     }
 
-    // FORENSIC DIAGNOSTIC SUITE
+    // Global Error Handlers
     window.addEventListener('error', (e) => {
-        console.error('%c[GLOBAL ERROR CAUGHT]', 'color: #ff0055; font-weight: bold;', e.error || e.message, e.filename, `L${e.lineno}:${e.colno}`);
+        console.error('[GLOBAL ERROR CAUGHT]', e.error || e.message, e.filename, `L${e.lineno}:${e.colno}`);
     });
     window.addEventListener('unhandledrejection', (e) => {
-        console.error('%c[UNHANDLED REJECTION CAUGHT]', 'color: #ff0055; font-weight: bold;', e.reason);
+        console.error('[UNHANDLED REJECTION CAUGHT]', e.reason);
     });
-
-    if (fileDetailsModal) {
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((m) => {
-                const timestamp = new Date().toISOString().split('T')[1];
-                console.log(
-                    `%c[MUTATION OBSERVER ${timestamp}] type=${m.type} target=${m.target.id || m.target.className} attr=${m.attributeName} oldVal=${m.oldValue} isConnected=${fileDetailsModal.isConnected} isHidden=${fileDetailsModal.classList.contains('hidden')}`,
-                    'color: #00ffaa; font-weight: bold; background: #002211; padding: 4px 8px; font-size: 14px;'
-                );
-                console.trace('[MUTATION OBSERVER CALLSTACK] DOM mutation trigger');
-            });
-        });
-        observer.observe(fileDetailsModal, { attributes: true, attributeFilter: ['class', 'style', 'hidden'], childList: true, subtree: true, attributeOldValue: true });
-        console.log('%c[DIAGNOSTIC] Comprehensive MutationObserver attached to #file-details-modal', 'color: #00f2fe; font-weight: bold;');
-    }
-
-    document.addEventListener('click', (e) => {
-        const timestamp = new Date().toISOString().split('T')[1];
-        if (fileDetailsModal && !fileDetailsModal.classList.contains('hidden')) {
-            console.log(
-                `%c[DOCUMENT CLICK ${timestamp}] target=${e.target.tagName}#${e.target.id}.${e.target.className} | modalContainsTarget=${fileDetailsModal.contains(e.target)}`,
-                'color: #ffaa00;'
-            );
-        }
-    }, true);
 
     loadStateFromStorage();
     setupSidebarListeners();

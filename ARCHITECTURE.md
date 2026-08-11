@@ -244,18 +244,23 @@ AgentOrchestrator ──► ToolRouter ──► PermissionManager (ASK Mode)
 
 ---
 
-### 3.6 Specialist Model Assignments
+### 3.6 Model Ecosystem & Pipeline Stage Categorization
 
-| Specialist Role | Model Name | Description |
-| :--- | :--- | :--- |
-| **Vulnerability Analyst** | `lazarevtill/WhiteRabbitNeo-2.5-Qwen-2.5-Coder-7B:latest` | Vulnerability assessment & exploit analysis |
-| **Coding / Decompilation** | `qwen2.5-coder:7b` | Assembly decompilation & code synthesis |
-| **Vision Analysis** | `huihui_ai/qwen2.5-vl-abliterated:7b` | Visual binary diagrams & UI analysis |
-| **Reasoning Engine** | `huihui_ai/deepseek-r1-abliterated:8b` | Deep chain-of-thought binary analysis |
-| **General RE Specialist** | `mannix/llama3.1-8b-abliterated:latest` | Reverse engineering domain knowledge |
-| **Synthesizer** | `mannix-re:latest` | Final report synthesis & multi-agent aggregation |
-| **Obfuscation Analyst** | `dolphin-mistral:7b-v2.6-q4_K_M` | Packed / obfuscated code analysis |
-| **Embeddings & Memory** | `nomic-embed-text:latest` | Vector embeddings for session memory |
+The EKKI-RE-AI model ecosystem is categorized across active pipeline stages, Hermes execution tool calling, and supporting vector memory:
+
+| Category / Role | Model Name | Execution Mechanism | Purpose / Description |
+| :--- | :--- | :--- | :--- |
+| **Coding / Decompilation Stage** | `qwen2.5-coder:7b` | `AgentOrchestrator` Stage 1 | Assembly decompilation & C pseudocode translation |
+| **Vulnerability Analyst Stage** | `lazarevtill/WhiteRabbitNeo-2.5-Qwen-2.5-Coder-7B:latest` | `AgentOrchestrator` Stage 2 | Vulnerability assessment & exploit analysis |
+| **Obfuscation Analyst Stage** | `dolphin-mistral:7b-v2.6-q4_K_M` | `AgentOrchestrator` Stage 3 | Anti-debugging, packing & evasion analysis |
+| **Lead Synthesizer Stage** | `mannix-re:latest` | `AgentOrchestrator` Stage 4 | Final RE report synthesis & multi-agent aggregation |
+| **Hermes Execution & Vision** | `huihui_ai/qwen2.5-vl-abliterated:7b` | `HermesBridge` Subprocess | Tool formatting, terminal execution & visual analysis |
+| **Reasoning Engine** | `huihui_ai/deepseek-r1-abliterated:8b` | Ollama Domain Standalone | Deep chain-of-thought binary reasoning |
+| **General RE Specialist** | `mannix/llama3.1-8b-abliterated:latest` | Ollama Domain Standalone | General reverse engineering domain knowledge |
+| **Embeddings & Session Memory** | `nomic-embed-text:latest` | Vector Memory Manager | Semantic embeddings for persistent session context |
+
+> [!NOTE]
+> To strictly enforce the 6GB VRAM hardware constraint (NVIDIA RTX 4050), `AgentOrchestrator` sequentially routes requests across 4 primary pipeline stages (`decompilation` → `vulnerability` → `obfuscation` → `synthesis`) with automatic GPU VRAM evacuation (`keep_alive: 0`) between stage switches. Additional ecosystem models serve dedicated standalone roles (Hermes CLI tool calling, vector memory, or direct single-model chat).
 
 ---
 
